@@ -1,12 +1,78 @@
-class TvPlannerCard extends HTMLElement {
+import { LitElement, html, css } from "lit";
+
+class TvPlannerCard extends LitElement {
+
+  static styles = css`
+    h2 {
+      margin-top: 0;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    #refresh {
+      margin-bottom: 12px;
+    }
+
+    .event {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 0;
+      border-top: 1px solid var(--divider-color);
+    }
+
+    .event-main {
+      min-width: 0;
+    }
+
+    .time,
+    .description {
+      color: var(--secondary-text-color);
+      font-size: 0.9em;
+      margin-top: 3px;
+    }
+
+    .copy {
+      align-self: center;
+      white-space: nowrap;
+    }
+
+    .day-separator {
+      margin-top: 14px;
+      padding: 6px 0;
+      font-weight: 700;
+      border-top: 1px solid var(--divider-color);
+      color: var(--accent-color);
+      font-size: 1.05em;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .success {
+      color: var(--accent-color);
+      font-size: 0.9em;
+    }
+
+    .source-selector {
+      margin: 10px 0 14px 0;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .source-selector select {
+      flex: 1;
+    }
+  `;
+
   setConfig(config) {
     this.config = config;
     this.events = [];
     this.loading = false;
     this.selectedSourceEntity =
-      config.source_entity ||
-      config.sources?.[0]?.entity ||
-      "";
+      config.source_entity || config.sources?.[0]?.entity || "";
   }
 
   set hass(hass) {
@@ -20,7 +86,7 @@ class TvPlannerCard extends HTMLElement {
 
   async loadEvents() {
     this.loading = true;
-    this.render();
+    this.requestUpdate();
 
     try {
       if (this.config.source_type === "ha_epg") {
@@ -34,7 +100,7 @@ class TvPlannerCard extends HTMLElement {
     }
 
     this.loading = false;
-    this.render();
+    this.requestUpdate();
   }
 
   async loadCalendarEvents() {
@@ -53,7 +119,7 @@ class TvPlannerCard extends HTMLElement {
         entity_id: this.config.source_calendar,
       },
       false,
-      true
+      true,
     );
 
     console.log("Calendar Copy Card response:", response);
@@ -80,7 +146,7 @@ class TvPlannerCard extends HTMLElement {
     console.log("Calendar Copy Card selected event:", event);
 
     const ok = confirm(
-      `Copy "${event.summary}" to ${this.config.target_calendar}?`
+      `Copy "${event.summary}" to ${this.config.target_calendar}?`,
     );
 
     if (!ok) return;
@@ -88,7 +154,8 @@ class TvPlannerCard extends HTMLElement {
     await this._hass.callService("script", this.config.copy_script, {
       source_type: this.config.source_type || "calendar",
       source_calendar: this.config.source_calendar || "",
-      source_entity: this.selectedSourceEntity || this.config.source_entity || "",
+      source_entity:
+        this.selectedSourceEntity || this.config.source_entity || "",
       target_calendar: this.config.target_calendar,
       summary: event.summary || "",
       description: event.description || "",
@@ -102,172 +169,183 @@ class TvPlannerCard extends HTMLElement {
     // await this._hass.callService("browser_mod", "refresh");
 
     this.lastCopied = event.summary || "Event";
-    this.render();
+    this.requestUpdate();
   }
 
-  render() {
-    if (!this._hass || !this.config) return;
+  // render() {
+  //   if (!this._hass || !this.config) return;
 
-    this.innerHTML = `
+  //   this.innerHTML = `
+  //     <ha-card>
+  //       <div class="card-content">
+  //         <h2>${this.config.title || "Copy calendar events"}</h2>
+
+  //         <button id="refresh">Reload events</button>
+  //         <button id="browser-refresh">Refresh dashboard</button>
+
+  //         ${
+  //           this.lastCopied
+  //             ? `<p class="success">Copied: ${this.lastCopied}</p>`
+  //             : ""
+  //         }
+
+  //         ${this.renderSourceSelector()}
+
+  //         ${
+  //           this.loading
+  //             ? `<p>Loading events...</p>`
+  //             : this.events.length === 0
+  //               ? `<p>No events found.</p>`
+  //               : Object.entries(this.groupEventsByDay())
+  //                   .map(
+  //                     ([day, events]) => `
+  //                       <div class="day-separator">
+  //                         ${this.formatDay(events[0].start)}
+  //                       </div>
+
+  //                       ${events
+  //                         .map((event) => {
+  //                           const index = this.events.indexOf(event);
+
+  //                           return `
+  //                             <div class="event">
+  //                               <div class="event-main">
+  //                                 <strong>${event.summary || "(No title)"}</strong>
+  //                                 <div class="time">
+  //                                   ${this.formatDate(event.start)}
+  //                                   →
+  //                                   ${this.formatDate(event.end)}
+  //                                 </div>
+  //                                 ${
+  //                                   event.description
+  //                                     ? `<div class="description">${event.description}</div>`
+  //                                     : ""
+  //                                 }
+  //                               </div>
+  //                               <button class="copy" data-index="${index}">
+  //                                 <!-- Copy -->
+  //                                 Copy
+  //                                 </button>
+  //                             </div>
+  //                           `;
+  //                         })
+  //                         .join("")}
+  //                     `,
+  //                   )
+  //                   .join("")
+  //         }
+  //       </div>
+
+  //       <style>
+  //         h2 {
+  //           margin-top: 0;
+  //         }
+
+  //         button {
+  //           cursor: pointer;
+  //         }
+
+  //         #refresh {
+  //           margin-bottom: 12px;
+  //         }
+
+  //         .event {
+  //           display: flex;
+  //           justify-content: space-between;
+  //           gap: 12px;
+  //           padding: 10px 0;
+  //           border-top: 1px solid var(--divider-color);
+  //         }
+
+  //         .event-main {
+  //           min-width: 0;
+  //         }
+
+  //         .time,
+  //         .description {
+  //           color: var(--secondary-text-color);
+  //           font-size: 0.9em;
+  //           margin-top: 3px;
+  //         }
+
+  //         .copy {
+  //           align-self: center;
+  //           white-space: nowrap;
+  //         }
+
+  //         .day-separator {
+  //           margin-top: 14px;
+  //           padding: 6px 0;
+  //           font-weight: 700;
+  //           border-top: 1px solid var(--divider-color);
+  //           color: var(--accent-color);
+  //           font-size: 1.05em;
+  //           text-transform: uppercase;
+  //           letter-spacing: 0.04em;
+  //         }
+
+  //         .success {
+  //           color: var(--accent-color);
+  //           font-size: 0.9em;
+  //         }
+
+  //         .source-selector {
+  //           margin: 10px 0 14px 0;
+  //           display: flex;
+  //           gap: 8px;
+  //           align-items: center;
+  //         }
+
+  //         .source-selector select {
+  //           flex: 1;
+  //         }
+
+  //       </style>
+  //     </ha-card>
+  //   `;
+
+  //   if (!this.listenersAttached) {
+  //     this.listenersAttached = true;
+
+  //     this.addEventListener("click", (ev) => {
+  //       const button = ev.target.closest("button");
+
+  //       if (!button) return;
+
+  //       if (button.id === "refresh") {
+  //         this.loadEvents();
+  //         return;
+  //       }
+
+  //       if (button.id === "browser-refresh") {
+  //         this._hass.callService("browser_mod", "refresh");
+  //         return;
+  //       }
+
+  //       if (button.classList.contains("copy")) {
+  //         const index = Number(button.dataset.index);
+  //         const event = this.events[index];
+  //         this.copyEvent(event);
+  //       }
+  //     });
+
+  //     this.addEventListener("change", (ev) => {
+  //       if (ev.target.id === "source-select") {
+  //         this.selectedSourceEntity = ev.target.value;
+  //         this.loadEvents();
+  //       }
+  //     });
+  //   }
+  // }
+
+  render() {
+    return html`
       <ha-card>
         <div class="card-content">
-          <h2>${this.config.title || "Copy calendar events"}</h2>
-
-          <button id="refresh">Reload events</button>
-          <button id="browser-refresh">Refresh dashboard</button>
-
-          ${this.lastCopied
-            ? `<p class="success">Copied: ${this.lastCopied}</p>`
-            : ""}
-            
-          ${this.renderSourceSelector()}
-
-          ${
-            this.loading
-              ? `<p>Loading events...</p>`
-              : this.events.length === 0
-                ? `<p>No events found.</p>`
-                : Object.entries(this.groupEventsByDay())
-                    .map(
-                      ([day, events]) => `
-                        <div class="day-separator">
-                          ${this.formatDay(events[0].start)}
-                        </div>
-
-                        ${events
-                          .map((event) => {
-                            const index = this.events.indexOf(event);
-
-                            return `
-                              <div class="event">
-                                <div class="event-main">
-                                  <strong>${event.summary || "(No title)"}</strong>
-                                  <div class="time">
-                                    ${this.formatDate(event.start)}
-                                    →
-                                    ${this.formatDate(event.end)}
-                                  </div>
-                                  ${
-                                    event.description
-                                      ? `<div class="description">${event.description}</div>`
-                                      : ""
-                                  }
-                                </div>
-                                <button class="copy" data-index="${index}">
-                                  <!-- Copy -->
-                                  Copy
-                                  </button>
-                              </div>
-                            `;
-                          })
-                          .join("")}
-                      `
-                    )
-                    .join("")
-          }
+          <h2>TV Planner Card</h2>
         </div>
-
-        <style>
-          h2 {
-            margin-top: 0;
-          }
-
-          button {
-            cursor: pointer;
-          }
-
-          #refresh {
-            margin-bottom: 12px;
-          }
-
-          .event {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 10px 0;
-            border-top: 1px solid var(--divider-color);
-          }
-
-          .event-main {
-            min-width: 0;
-          }
-
-          .time,
-          .description {
-            color: var(--secondary-text-color);
-            font-size: 0.9em;
-            margin-top: 3px;
-          }
-
-          .copy {
-            align-self: center;
-            white-space: nowrap;
-          }
-
-          .day-separator {
-            margin-top: 14px;
-            padding: 6px 0;
-            font-weight: 700;
-            border-top: 1px solid var(--divider-color);
-            color: var(--accent-color);
-            font-size: 1.05em;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-          }
-
-          .success {
-            color: var(--accent-color);
-            font-size: 0.9em;
-          }
-
-          .source-selector {
-            margin: 10px 0 14px 0;
-            display: flex;
-            gap: 8px;
-            align-items: center;
-          }
-
-          .source-selector select {
-            flex: 1;
-          }
-
-        </style>
       </ha-card>
     `;
-
-    if (!this.listenersAttached) {
-      this.listenersAttached = true;
-
-      this.addEventListener("click", (ev) => {
-        const button = ev.target.closest("button");
-
-        if (!button) return;
-
-        if (button.id === "refresh") {
-          this.loadEvents();
-          return;
-        }
-
-        if (button.id === "browser-refresh") {
-          this._hass.callService("browser_mod", "refresh");
-          return;
-        }
-
-        if (button.classList.contains("copy")) {
-          const index = Number(button.dataset.index);
-          const event = this.events[index];
-          this.copyEvent(event);
-        }
-      });
-
-      this.addEventListener("change", (ev) => {
-        if (ev.target.id === "source-select") {
-          this.selectedSourceEntity = ev.target.value;
-          this.loadEvents();
-        }
-      });
-    }
-    
   }
 
   renderSourceSelector() {
@@ -286,7 +364,7 @@ class TvPlannerCard extends HTMLElement {
                 >
                   ${source.label}
                 </option>
-              `
+              `,
             )
             .join("")}
         </select>
@@ -330,7 +408,10 @@ class TvPlannerCard extends HTMLElement {
     const entity = this._hass.states[this.selectedSourceEntity];
 
     if (!entity) {
-      console.error("Calendar Copy Card: HA-EPG entity not found", this.selectedSourceEntity);
+      console.error(
+        "Calendar Copy Card: HA-EPG entity not found",
+        this.selectedSourceEntity,
+      );
       this.events = [];
       return;
     }
@@ -340,7 +421,12 @@ class TvPlannerCard extends HTMLElement {
     const channelIcon = attrs.channel_icon || "";
 
     const today = this.epgDayToEvents(attrs.today, 0, channelName, channelIcon);
-    const tomorrow = this.epgDayToEvents(attrs.tomorrow, 1, channelName, channelIcon);
+    const tomorrow = this.epgDayToEvents(
+      attrs.tomorrow,
+      1,
+      channelName,
+      channelIcon,
+    );
 
     this.events = [...today, ...tomorrow];
   }
@@ -383,7 +469,6 @@ class TvPlannerCard extends HTMLElement {
 
     return result;
   }
-
 }
 
 customElements.define("tv-planner-card", TvPlannerCard);
