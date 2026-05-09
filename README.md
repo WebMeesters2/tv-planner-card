@@ -1,4 +1,5 @@
 # tv-planner-card
+
 A Home Assistant custom Lovelace card for browsing EPG/program sources and copying selected items to calendars.
 
 # TV Planner Card
@@ -6,6 +7,25 @@ A Home Assistant custom Lovelace card for browsing EPG/program sources and copyi
 A custom Lovelace card for Home Assistant that allows browsing TV/EPG program sources and copying selected programs into Home Assistant calendars.
 
 The project started as a personal workflow tool for curating TV schedules from multiple EPG sources into a final “watch list” calendar, but is designed to support generic scheduling and planning workflows as well.
+
+---
+
+## Background
+
+I use Home Assistant to automatically switch TV channels based on calendar events.
+
+In practice, I use two separate calendars:
+
+- A **staging calendar** containing programs I *might* want to watch
+- A **live viewing calendar** containing programs I definitely want to watch live
+
+This card was created to simplify the process of browsing TV schedules and copying programs between those calendars.
+
+The project also integrates nicely with the excellent HA-EPG integration, allowing TV schedules to be browsed directly from EPG sources and copied into Home Assistant calendars.
+
+While my personal workflow uses two calendars, there is absolutely no requirement to do so — the card can also be used with a single planning calendar or for completely different scheduling workflows.
+
+The automatic TV switching automation itself will eventually become a separate project.
 
 ---
 
@@ -19,6 +39,35 @@ The project started as a personal workflow tool for curating TV schedules from m
 - Manual refresh controls
 - Lightweight frontend-only architecture
 - No destructive "move/delete" logic
+- Mobile-friendly layout
+
+---
+
+## Screenshots
+
+### HA-EPG source browser
+
+![HA-EPG source browser](screenshots/epg-selector.png)
+
+### HA-EPG source card
+
+![HA-EPG source card](screenshots/epg-base.png)
+
+### Intermediate planning calendar
+
+![Intermediate planning calendar](screenshots/intermediate-calendar.png)
+
+### Calendar-to-calendar copy workflow
+
+![Calendar copy workflow](screenshots/calendar-copy.png)
+
+### Final viewing calendar
+
+![Final viewing calendar](screenshots/definite-calendar.png)
+
+### Mobile view
+
+![Mobile view](screenshots/mobile-view.png)
 
 ---
 
@@ -70,7 +119,10 @@ copy_script: script.calendar_copy_event_to_another_calendar
 days_to_show: 14
 ```
 
+---
+
 ## Example: HA-EPG → Calendar
+
 ```yaml
 type: custom:tv-planner-card
 title: Copy EPG → Teevee Twee
@@ -82,8 +134,10 @@ days_to_show: 2
 sources:
   - label: NPO 1
     entity: sensor.epg_npo1
+
   - label: NPO 2
     entity: sensor.epg_npo2
+
   - label: SBS6
     entity: sensor.epg_sbs6
 ```
@@ -91,7 +145,9 @@ sources:
 ---
 
 ## Required Home Assistant Script
-Example copy script
+
+Example copy script:
+
 ```yaml
 alias: Calendar - Copy event to another calendar
 mode: single
@@ -172,20 +228,30 @@ sequence:
 ---
 
 ## Installation (manual)
-1. Copy `tv-planner-card.js` to `/config/www/`
+
+1. Copy `tv-planner-card.js` to:
+
+```text
+/config/www/
+```
+
 2. Add as a dashboard resource:
+
 ```yaml
 url: /local/tv-planner-card.js
 type: module
 ```
-3. Restart Home Assistant frontend, or hard-refresh browser.
+
+3. Restart the Home Assistant frontend, or hard-refresh the browser.
 
 ---
 
 ## Disclaimer
+
 This project is not affiliated with any EPG provider or broadcaster.
 
 ---
 
 ## License
+
 MIT
