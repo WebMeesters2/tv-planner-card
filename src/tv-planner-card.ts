@@ -1,10 +1,16 @@
 import { LitElement, html, css } from "lit";
-import { state } from "lit/decorators.js";
-import { property } from "lit/decorators.js";
+import { property, state } from "lit/decorators.js";
+
+/* -------------------------------------------------------------------------- */
+/* Types                                                                      */
+/* -------------------------------------------------------------------------- */
+
+type SourceType = "calendar" | "ha_epg";
+type EventSource = "calendar" | "ha_epg";
 
 interface TvPlannerCardConfig {
   title?: string;
-  source_type?: "calendar" | "ha_epg";
+  source_type?: SourceType;
   source_calendar?: string;
   source_entity?: string;
   target_calendar: string;
@@ -23,29 +29,67 @@ interface TvPlannerSource {
 interface TvPlannerEvent {
   start: string;
   end: string;
-  summary?: string;
-  description?: string;
-  location?: string;
-  channel_icon?: string;
-  source?: string;
+  summary: string;
+  description: string;
+  location: string;
+  channel_icon: string;
+  source: EventSource;
+}
+
+interface HassEntity {
+  state?: string;
+  attributes: Record<string, unknown>;
 }
 
 type HassLike = {
-  states: Record<string, any>;
-  callService: (...args: any[]) => Promise<any>;
+  states: Record<string, HassEntity | undefined>;
+  callService: (...args: unknown[]) => Promise<unknown>;
 };
+
+interface CalendarEventLike {
+  start?: CalendarDateLike | string;
+  end?: CalendarDateLike | string;
+  summary?: unknown;
+  title?: unknown;
+  description?: unknown;
+  location?: unknown;
+  channel_icon?: unknown;
+}
+
+interface CalendarDateLike {
+  date?: unknown;
+  dateTime?: unknown;
+}
+
+interface HaEpgProgramLike {
+  title?: unknown;
+  desc?: unknown;
+  sub_title?: unknown;
+  start?: unknown;
+  end?: unknown;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Card                                                                       */
+/* -------------------------------------------------------------------------- */
 
 class TvPlannerCard extends LitElement {
   @property({ attribute: false })
   public config?: TvPlannerCardConfig;
+
   private _hass?: HassLike;
 
   @state() private events: TvPlannerEvent[] = [];
-  @state() private loading: boolean = false;
-  @state() private selectedSourceEntity: string = "";
-  @state() private lastCopied: string = "";
-  @state() private loaded: boolean = false;
-  @state() private errorMessage: string = "";
+  @state() private loading = false;
+  @state() private selectedSourceEntity = "";
+  @state() private lastCopied = "";
+  @state() private loaded = false;
+  @state() private errorMessage = "";
+  @state() private externalChannelIcons: Record<string, string> = {};
+
+  /* ------------------------------------------------------------------------ */
+  /* Styles                                                                   */
+  /* ------------------------------------------------------------------------ */
 
   static styles = css`
     h2 {
@@ -95,9 +139,17 @@ class TvPlannerCard extends LitElement {
       letter-spacing: 0.04em;
     }
 
+    .success,
+    .error {
+      font-size: 0.9em;
+    }
+
     .success {
       color: var(--accent-color);
-      font-size: 0.9em;
+    }
+
+    .error {
+      color: var(--error-color);
     }
 
     .source-selector {
@@ -123,19 +175,20 @@ class TvPlannerCard extends LitElement {
       object-fit: contain;
       flex: 0 0 auto;
     }
-
-    .error {
-      color: var(--error-color);
-      font-size: 0.9em;
-    }
   `;
+
+  /* ------------------------------------------------------------------------ */
+  /* Home Assistant / card lifecycle                                          */
+  /* ------------------------------------------------------------------------ */
 
   setConfig(config: TvPlannerCardConfig) {
     this.config = config;
     this.events = [];
     this.loading = false;
+    this.errorMessage = "";
     this.selectedSourceEntity =
       config.source_entity || config.sources?.[0]?.entity || "";
+
     this.loadExternalChannelIcons();
   }
 
@@ -148,7 +201,181 @@ class TvPlannerCard extends LitElement {
     }
   }
 
-  async loadEvents() {
+  getCardSize() {
+    return 4;
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* Render                                                                   */
+  /* ------------------------------------------------------------------------ */
+
+  render() {
+    if (!this._hass || !this.config) {
+      return html``;
+    }
+
+    return html`
+      <ha-card>
+        <div class="card-content">
+          <h2>${this.config.title || "TV Planner Card"}</h2>
+
+          <button id="refresh" @click=${() => this.loadEvents()}>
+            Reload events
+          </button>
+
+          <button id="browser-refresh" @click=${() => this.refreshDashboard()}>
+            Refresh dashboard
+          </button>
+
+          ${this.lastCopied
+            ? html`<p class="success">Copied: ${this.lastCopied}</p>`
+            : html``}
+          ${this.renderSourceSelector()} ${this.renderBody()}
+        </div>
+      </ha-card>
+    `;
+  }
+
+  private renderBody() {
+    if (this.loading) {
+      return html`<p>Loading events...</p>`;
+    }
+
+    if (this.errorMessage) {
+      return html`<p class="error">Error: ${this.errorMessage}</p>`;
+    }
+
+    if (this.events.length === 0) {
+      return html`<p>No events found.</p>`;
+    }
+
+    return this.renderEventGroups();
+  }
+
+  private renderSourceSelector() {
+    const sources = this.config?.sources;
+
+    if (!sources?.length) {
+      return html``;
+    }
+
+    return html`
+      <div class="source-selector">
+        <label for="source-select">Channel</label>
+
+        <select
+          id="source-select"
+          .value=${this.selectedSourceEntity}
+          @change=${(ev: Event) => this.sourceChanged(ev)}
+        >
+          ${sources.map(
+            (source) => html`
+              <option value=${source.entity}>${source.label}</option>
+            `,
+          )}
+        </select>
+      </div>
+    `;
+  }
+
+  private renderEventGroups() {
+    return Object.values(this.groupEventsByDay()).map(
+      (events) => html`
+        <div class="day-separator">
+          ${events[0] ? this.formatDay(events[0].start) : ""}
+        </div>
+
+        ${events.map((event) => this.renderEvent(event))}
+      `,
+    );
+  }
+
+  private renderEvent(event: TvPlannerEvent) {
+    const icon = this.getEventIcon(event);
+
+    return html`
+      <div class="event">
+        <div class="event-main">
+          <div class="event-title-row">
+            ${icon
+              ? html`<img class="channel-icon" src=${icon} alt="" />`
+              : html``}
+
+            <strong>${event.summary || "(No title)"}</strong>
+          </div>
+
+          <div class="time">
+            ${this.formatDate(event.start)} → ${this.formatDate(event.end)}
+          </div>
+
+          ${event.description
+            ? html`<div class="description">${event.description}</div>`
+            : html``}
+        </div>
+
+        <button class="copy" @click=${() => this.copyEvent(event)}>Copy</button>
+      </div>
+    `;
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* User actions                                                             */
+  /* ------------------------------------------------------------------------ */
+
+  private sourceChanged(ev: Event) {
+    const target = ev.target as HTMLSelectElement;
+    this.selectedSourceEntity = target.value;
+    this.loadEvents();
+  }
+
+  private refreshDashboard() {
+    const hass = this._hass;
+
+    if (!hass) {
+      alert("Home Assistant connection not found.");
+      return;
+    }
+
+    hass.callService("browser_mod", "refresh");
+  }
+
+  private async copyEvent(event: TvPlannerEvent) {
+    const config = this.config;
+    const hass = this._hass;
+
+    if (!config) {
+      alert("Configuration not found.");
+      return;
+    }
+
+    if (!hass) {
+      alert("Home Assistant connection not found.");
+      return;
+    }
+
+    const ok = confirm(`Copy "${event.summary}" to ${config.target_calendar}?`);
+    if (!ok) return;
+
+    await hass.callService("script", config.copy_script, {
+      source_type: config.source_type || "calendar",
+      source_calendar: config.source_calendar || "",
+      source_entity: this.selectedSourceEntity || config.source_entity || "",
+      target_calendar: config.target_calendar,
+      summary: event.summary,
+      description: event.description,
+      location: event.location,
+      start_date_time: event.start,
+      end_date_time: event.end,
+    });
+
+    this.lastCopied = event.summary || "Event";
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* Event loading                                                            */
+  /* ------------------------------------------------------------------------ */
+
+  private async loadEvents() {
     this.loading = true;
     this.errorMessage = "";
 
@@ -174,9 +401,8 @@ class TvPlannerCard extends LitElement {
       this.loading = false;
     }
   }
-  async loadCalendarEvents() {
-    const start = new Date();
-    const end = new Date();
+
+  private async loadCalendarEvents() {
     const config = this.config;
     const hass = this._hass;
 
@@ -185,6 +411,8 @@ class TvPlannerCard extends LitElement {
       return;
     }
 
+    const start = new Date();
+    const end = new Date();
     end.setDate(end.getDate() + (config.days_to_show || 14));
 
     const response = await hass.callService(
@@ -203,312 +431,175 @@ class TvPlannerCard extends LitElement {
 
     console.log("TV Planner Card calendar response:", response);
 
-    const data = response?.response || response;
-
-    let rawEvents: any[] = [];
-
-    if (Array.isArray(data)) {
-      rawEvents = data;
-    } else if (Array.isArray(data?.events)) {
-      rawEvents = data.events;
-    } else if (Array.isArray(data?.[config.source_calendar]?.events)) {
-      rawEvents = data[config.source_calendar].events;
-    }
-
+    const rawEvents = this.extractCalendarEvents(
+      response,
+      config.source_calendar,
+    );
     this.events = rawEvents.map((event) => this.normalizeCalendarEvent(event));
   }
-  async copyEvent(event: TvPlannerEvent) {
-    if (!event) {
-      alert("Could not find this event.");
-      return;
-    }
 
-    console.log("Calendar Copy Card selected event:", event);
-
-    const config = this.config;
-
-    if (!config) {
-      alert("Configuration not found.");
-      return;
-    }
-
+  private loadHaEpgEvents() {
     const hass = this._hass;
+
     if (!hass) {
       alert("Home Assistant connection not found.");
       return;
     }
 
-    const ok = confirm(`Copy "${event.summary}" to ${config.target_calendar}?`);
+    const entity = hass.states[this.selectedSourceEntity];
 
-    if (!ok) return;
-
-    await hass.callService("script", config.copy_script, {
-      source_type: config.source_type || "calendar",
-      source_calendar: config.source_calendar || "",
-      source_entity: this.selectedSourceEntity || config.source_entity || "",
-      target_calendar: config.target_calendar,
-      summary: event.summary || "",
-      description: event.description || "",
-      location: event.location || "",
-      start_date_time: event.start,
-      end_date_time: event.end,
-    });
-
-    // Old browser-refresh after each copy
-    // await this.loadEvents();
-    // await this._hass.callService("browser_mod", "refresh");
-
-    this.lastCopied = event.summary || "Event";
-  }
-
-  render() {
-    if (!this._hass || !this.config) {
-      return html``;
+    if (!entity) {
+      console.error(
+        "TV Planner Card: HA-EPG entity not found",
+        this.selectedSourceEntity,
+      );
+      this.events = [];
+      return;
     }
 
-    return html`
-      <ha-card>
-        <div class="card-content">
-          <h2>${this.config.title || "TV Planner Card"}</h2>
+    const attrs = entity.attributes;
+    const channelName = this.asString(attrs.channel_display_name);
+    const channelIcon = this.asString(attrs.channel_icon);
 
-          <button id="refresh" @click=${() => this.loadEvents()}>
-            Reload events
-          </button>
-
-          <button id="browser-refresh" @click=${this.refreshDashboard}>
-            Refresh dashboard
-          </button>
-
-          ${this.lastCopied
-            ? html`<p class="success">Copied: ${this.lastCopied}</p>`
-            : html``}
-          ${this.renderSourceSelector()}
-          ${this.loading
-            ? html`<p>Loading events...</p>`
-            : this.errorMessage
-              ? html`<p class="error">Error: ${this.errorMessage}</p>`
-              : this.events.length === 0
-                ? html`<p>No events found.</p>`
-                : this.renderEventGroups()}
-        </div>
-      </ha-card>
-    `;
-  }
-
-  renderEventGroups() {
-    return Object.entries(this.groupEventsByDay()).map(
-      ([day, events]) => html`
-        <div class="day-separator">
-          ${events[0] ? this.formatDay(events[0].start) : ""}
-        </div>
-
-        ${events.map((event) => this.renderEvent(event))}
-      `,
+    const today = this.epgDayToEvents(attrs.today, 0, channelName, channelIcon);
+    const tomorrow = this.epgDayToEvents(
+      attrs.tomorrow,
+      1,
+      channelName,
+      channelIcon,
     );
+
+    this.events = [...today, ...tomorrow];
   }
 
-  renderEvent(event: TvPlannerEvent) {
-    const icon = this.getEventIcon(event);
+  /* ------------------------------------------------------------------------ */
+  /* Calendar parsing                                                         */
+  /* ------------------------------------------------------------------------ */
 
-    return html`
-      <div class="event">
-        <div class="event-main">
-          <div class="event-title-row">
-            ${icon
-              ? html`<img class="channel-icon" src="${icon}" alt="" />`
-              : html``}
+  private extractCalendarEvents(
+    response: unknown,
+    sourceCalendar: string,
+  ): CalendarEventLike[] {
+    const data = this.getResponsePayload(response);
 
-            <strong>${event.summary || "(No title)"}</strong>
-          </div>
-
-          <div class="time">
-            ${this.formatDate(event.start)} → ${this.formatDate(event.end)}
-          </div>
-
-          ${event.description
-            ? html`<div class="description">${event.description}</div>`
-            : html``}
-        </div>
-
-        <button class="copy" @click=${() => this.copyEvent(event)}>Copy</button>
-      </div>
-    `;
-  }
-  refreshDashboard() {
-    const hass = this._hass;
-    if (!hass) {
-      alert("Home Assistant connection not found.");
-      return;
+    if (Array.isArray(data)) {
+      return data as CalendarEventLike[];
     }
 
-    hass.callService("browser_mod", "refresh");
-  }
-
-  renderSourceSelector() {
-    const config = this.config;
-
-    if (!config) {
-      alert("Configuration not found.");
-      return;
+    if (!this.isRecord(data)) {
+      return [];
     }
 
-    if (!config.sources?.length) {
-      return html``;
+    if (Array.isArray(data.events)) {
+      return data.events as CalendarEventLike[];
     }
 
-    return html`
-      <div class="source-selector">
-        <label for="source-select">Channel</label>
+    const calendarData = data[sourceCalendar];
 
-        <select
-          id="source-select"
-          .value=${this.selectedSourceEntity}
-          @change=${(ev: Event) => this.sourceChanged(ev)}
-        >
-          ${config.sources.map(
-            (source) => html`
-              <option value=${source.entity}>${source.label}</option>
-            `,
-          )}
-        </select>
-      </div>
-    `;
+    if (this.isRecord(calendarData) && Array.isArray(calendarData.events)) {
+      return calendarData.events as CalendarEventLike[];
+    }
+
+    return [];
   }
 
-  normalizeCalendarEvent(event: any): TvPlannerEvent {
-    const start =
-      event.start?.dateTime || event.start?.date || event.start || "";
-
-    const end = event.end?.dateTime || event.end?.date || event.end || "";
-
+  private normalizeCalendarEvent(event: CalendarEventLike): TvPlannerEvent {
     return {
-      start,
-      end,
-      summary: String(event.summary || event.title || ""),
-      description: String(event.description || ""),
-      location: String(event.location || ""),
-      channel_icon: event.channel_icon ? String(event.channel_icon) : "",
+      start: this.extractCalendarDate(event.start),
+      end: this.extractCalendarDate(event.end),
+      summary: this.asString(event.summary || event.title),
+      description: this.asString(event.description),
+      location: this.asString(event.location),
+      channel_icon: this.asString(event.channel_icon),
       source: "calendar",
     };
   }
 
-  sourceChanged(ev: Event) {
-    const target = ev.target as HTMLSelectElement;
-    this.selectedSourceEntity = target.value;
-    this.loadEvents();
-  }
-
-  formatDate(value: string) {
-    if (!value) return "";
-    return new Date(value).toLocaleString(undefined, {
-      weekday: "short",
-      day: "2-digit",
-      month: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
-  groupEventsByDay(): Record<string, TvPlannerEvent[]> {
-    return this.events.reduce<Record<string, TvPlannerEvent[]>>(
-      (groups, event) => {
-        const key = new Date(event.start).toDateString();
-
-        if (!groups[key]) {
-          groups[key] = [];
-        }
-
-        groups[key].push(event);
-        return groups;
-      },
-      {},
-    );
-  }
-
-  getEventChannel(event: TvPlannerEvent): string {
-    const location = String(event.location || "").trim();
-
-    if (location) {
-      return location;
+  private extractCalendarDate(value: CalendarDateLike | string | undefined) {
+    if (typeof value === "string") {
+      return value;
     }
 
-    const summary = String(event.summary || "");
-
-    if (summary.includes("|")) {
-      return summary.split("|")[0].trim();
+    if (this.isRecord(value)) {
+      return this.asString(value.dateTime || value.date);
     }
 
     return "";
   }
 
-  getEventIcon(event: TvPlannerEvent): string {
-    try {
-      if (event.channel_icon) {
-        return String(event.channel_icon);
-      }
+  /* ------------------------------------------------------------------------ */
+  /* HA-EPG parsing                                                           */
+  /* ------------------------------------------------------------------------ */
 
-      const channel = this.getEventChannel(event);
-      if (!channel) return "";
-
-      const icons = this.getCombinedChannelIcons();
-
-      for (const alias of this.getChannelAliases(channel)) {
-        if (icons[alias]) {
-          return icons[alias];
-        }
-      }
-
-      return "";
-    } catch (err) {
-      console.warn("TV Planner Card: icon lookup failed", err, event);
-      return "";
+  private epgDayToEvents(
+    dayData: unknown,
+    dayOffset: number,
+    channelName: string,
+    channelIcon: string,
+  ): TvPlannerEvent[] {
+    if (!this.isRecord(dayData)) {
+      return [];
     }
+
+    const baseDate = new Date();
+    baseDate.setDate(baseDate.getDate() + dayOffset);
+
+    return Object.values(dayData)
+      .filter((program): program is HaEpgProgramLike => this.isRecord(program))
+      .map((program) =>
+        this.epgProgramToEvent(program, baseDate, channelName, channelIcon),
+      );
   }
 
-  getCombinedChannelIcons(): Record<string, string> {
-    const icons: Record<string, string> = {};
-
-    const addIcons = (source?: Record<string, unknown>) => {
-      if (!source || typeof source !== "object") return;
-
-      Object.entries(source).forEach(([name, icon]) => {
-        if (!name || typeof icon !== "string") return;
-
-        for (const alias of this.getChannelAliases(name)) {
-          icons[alias] = icon;
-        }
-      });
-    };
-
-    addIcons(this.externalChannelIcons);
-    addIcons(this.config?.channel_icons);
-    addIcons(this.getChannelIconMap());
-
-    return icons;
-  }
-
-  getChannelAliases(channel: string): string[] {
-    const original = String(channel || "").trim();
-    const normalized = this.normalizeChannelName(original);
-    const compact = normalized.replace(/\s+/g, "");
-    const spacedNumber = normalized.replace(/^([A-Z]+)([0-9]+)$/u, "$1 $2");
-
-    return [...new Set([original, normalized, compact, spacedNumber])].filter(
-      Boolean,
+  private epgProgramToEvent(
+    program: HaEpgProgramLike,
+    baseDate: Date,
+    channelName: string,
+    channelIcon: string,
+  ): TvPlannerEvent {
+    const start = this.combineDateAndTime(
+      baseDate,
+      this.asString(program.start),
     );
+    const end = this.getProgramEndDate(
+      baseDate,
+      start,
+      this.asString(program.end),
+    );
+
+    const title = this.asString(program.title);
+    const subTitle = this.asString(program.sub_title);
+
+    return {
+      start: start.toISOString(),
+      end: end.toISOString(),
+      summary: subTitle
+        ? `${channelName} | ${title} • ${subTitle}`
+        : `${channelName} | ${title}`,
+      description: this.asString(program.desc),
+      location: channelName,
+      channel_icon: channelIcon,
+      source: "ha_epg",
+    };
   }
 
-  normalizeChannelName(channel: string): string {
-    return String(channel || "")
-      .replace(/\s+/g, " ")
-      .trim()
-      .toUpperCase();
-  }
-  @state()
-  private externalChannelIcons: Record<string, string> = {};
+  private getProgramEndDate(baseDate: Date, start: Date, endTime: string) {
+    const end = this.combineDateAndTime(baseDate, endTime);
 
-  async loadExternalChannelIcons() {
+    if (end <= start) {
+      end.setDate(end.getDate() + 1);
+    }
+
+    return end;
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* Channel icons                                                            */
+  /* ------------------------------------------------------------------------ */
+
+  private async loadExternalChannelIcons() {
     const url = this.config?.channel_icons_url;
+
     if (!url) {
       this.externalChannelIcons = {};
       return;
@@ -523,7 +614,7 @@ class TvPlannerCard extends LitElement {
 
       const icons = await response.json();
 
-      if (!icons || typeof icons !== "object" || Array.isArray(icons)) {
+      if (!this.isRecord(icons)) {
         throw new Error("Channel icons JSON is not an object");
       }
 
@@ -544,30 +635,141 @@ class TvPlannerCard extends LitElement {
     }
   }
 
-  getChannelIconMap(): Record<string, string> {
+  private getEventIcon(event: TvPlannerEvent): string {
+    try {
+      if (event.channel_icon) {
+        return event.channel_icon;
+      }
+
+      const channel = this.getEventChannel(event);
+      if (!channel) return "";
+
+      const icons = this.getCombinedChannelIcons();
+
+      for (const alias of this.getChannelAliases(channel)) {
+        if (icons[alias]) {
+          return icons[alias];
+        }
+      }
+
+      return "";
+    } catch (err) {
+      console.warn("TV Planner Card: icon lookup failed", err, event);
+      return "";
+    }
+  }
+
+  private getEventChannel(event: TvPlannerEvent): string {
+    if (event.location) {
+      return event.location.trim();
+    }
+
+    if (event.summary.includes("|")) {
+      return event.summary.split("|")[0].trim();
+    }
+
+    return "";
+  }
+
+  private getCombinedChannelIcons(): Record<string, string> {
+    const icons: Record<string, string> = {};
+
+    this.addChannelIcons(icons, this.externalChannelIcons);
+    this.addChannelIcons(icons, this.config?.channel_icons);
+    this.addChannelIcons(icons, this.getChannelIconMap());
+
+    return icons;
+  }
+
+  private getChannelIconMap(): Record<string, string> {
     const hass = this._hass;
     const sources = this.config?.sources || [];
+    const icons: Record<string, string> = {};
 
-    if (!hass) return {};
+    if (!hass) {
+      return icons;
+    }
 
-    return sources.reduce<Record<string, string>>((icons, source) => {
+    for (const source of sources) {
       const entity = hass.states[source.entity];
-      if (!entity) return icons;
+      if (!entity) continue;
 
       const channelName =
-        entity.attributes.channel_display_name || source.label;
-      const channelIcon = entity.attributes.channel_icon;
+        this.asString(entity.attributes.channel_display_name) || source.label;
+      const channelIcon = this.asString(entity.attributes.channel_icon);
 
       if (channelIcon) {
         icons[channelName] = channelIcon;
         icons[source.label] = channelIcon;
       }
+    }
 
-      return icons;
-    }, {});
+    return icons;
   }
 
-  formatDay(value: string) {
+  private addChannelIcons(
+    target: Record<string, string>,
+    source?: Record<string, string>,
+  ) {
+    if (!source) return;
+
+    Object.entries(source).forEach(([name, icon]) => {
+      if (!icon) return;
+
+      for (const alias of this.getChannelAliases(name)) {
+        target[alias] = icon;
+      }
+    });
+  }
+
+  private getChannelAliases(channel: string): string[] {
+    const original = channel.trim();
+    const normalized = this.normalizeChannelName(original);
+    const compact = normalized.replace(/\s+/g, "");
+    const spacedNumber = normalized.replace(/^([A-Z]+)([0-9]+)$/u, "$1 $2");
+
+    return [...new Set([original, normalized, compact, spacedNumber])].filter(
+      Boolean,
+    );
+  }
+
+  private normalizeChannelName(channel: string): string {
+    return channel.replace(/\s+/g, " ").trim().toUpperCase();
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* Date / grouping helpers                                                  */
+  /* ------------------------------------------------------------------------ */
+
+  private groupEventsByDay(): Record<string, TvPlannerEvent[]> {
+    return this.events.reduce<Record<string, TvPlannerEvent[]>>(
+      (groups, event) => {
+        const key = new Date(event.start).toDateString();
+
+        if (!groups[key]) {
+          groups[key] = [];
+        }
+
+        groups[key].push(event);
+        return groups;
+      },
+      {},
+    );
+  }
+
+  private formatDate(value: string) {
+    if (!value) return "";
+
+    return new Date(value).toLocaleString(undefined, {
+      weekday: "short",
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }
+
+  private formatDay(value: string) {
     return new Date(value).toLocaleDateString(undefined, {
       weekday: "long",
       day: "numeric",
@@ -575,88 +777,33 @@ class TvPlannerCard extends LitElement {
     });
   }
 
-  getCardSize() {
-    return 4;
-  }
-
-  loadHaEpgEvents() {
-    const hass = this._hass;
-    if (!hass) {
-      alert("Home Assistant connection not found.");
-      return;
-    }
-
-    const entity = hass.states[this.selectedSourceEntity];
-
-    if (!entity) {
-      console.error(
-        "Calendar Copy Card: HA-EPG entity not found",
-        this.selectedSourceEntity,
-      );
-      this.events = [];
-      return;
-    }
-
-    const attrs = entity.attributes;
-    const channelName = attrs.channel_display_name || "";
-    const channelIcon = attrs.channel_icon || "";
-
-    const today = this.epgDayToEvents(attrs.today, 0, channelName, channelIcon);
-    const tomorrow = this.epgDayToEvents(
-      attrs.tomorrow,
-      1,
-      channelName,
-      channelIcon,
-    );
-
-    this.events = [...today, ...tomorrow];
-  }
-
-  epgDayToEvents(
-    dayData: any,
-    dayOffset: number,
-    channelName: string,
-    channelIcon: string,
-  ) {
-    if (!dayData) return [];
-
-    const baseDate = new Date();
-    baseDate.setDate(baseDate.getDate() + dayOffset);
-
-    return Object.values(dayData).map((program: any) => {
-      const start = this.combineDateAndTime(baseDate, program.start);
-      let end = this.combineDateAndTime(baseDate, program.end);
-
-      if (end <= start) {
-        end.setDate(end.getDate() + 1);
-      }
-
-      const title = program.sub_title
-        ? `${channelName} | ${program.title} • ${program.sub_title}`
-        : `${channelName} | ${program.title}`;
-
-      return {
-        start: start.toISOString(),
-        end: end.toISOString(),
-        summary: title,
-        description: program.desc || "",
-        location: channelName,
-        channel_icon: channelIcon,
-        source: "ha_epg",
-      };
-    });
-  }
-
-  combineDateAndTime(date: Date, time: string) {
-    const parts = time.split(":").map(Number);
-
-    const hours = parts[0] ?? 0;
-    const minutes = parts[1] ?? 0;
+  private combineDateAndTime(date: Date, time: string) {
+    const [hours = 0, minutes = 0] = time.split(":").map(Number);
 
     const result = new Date(date);
     result.setHours(hours, minutes, 0, 0);
 
     return result;
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* Generic parsing helpers                                                  */
+  /* ------------------------------------------------------------------------ */
+
+  private getResponsePayload(response: unknown): unknown {
+    if (this.isRecord(response) && "response" in response) {
+      return response.response;
+    }
+
+    return response;
+  }
+
+  private isRecord(value: unknown): value is Record<string, unknown> {
+    return !!value && typeof value === "object" && !Array.isArray(value);
+  }
+
+  private asString(value: unknown): string {
+    return typeof value === "string" ? value : "";
   }
 }
 
