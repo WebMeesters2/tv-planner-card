@@ -16,7 +16,7 @@ I use Home Assistant to automatically switch TV channels based on calendar event
 
 In practice, I use two separate calendars:
 
-- A **staging calendar** containing programs I *might* want to watch
+- A **staging calendar** containing programs I _might_ want to watch
 - A **live viewing calendar** containing programs I definitely want to watch live
 
 This card was created to simplify the process of browsing TV schedules and copying programs between those calendars.

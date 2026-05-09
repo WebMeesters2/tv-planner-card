@@ -1,6 +1,7 @@
 {
   "name": "tv-planner-card",
   "version": "1.0.0",
+  "type": "module",
   "description": "A Home Assistant custom Lovelace card for browsing EPG/program sources and copying selected items to calendars.",
   "main": "vite.config.js",
   "scripts": {

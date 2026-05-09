@@ -1,6 +1,44 @@
 import { LitElement, html, css } from "lit";
 
+interface TvPlannerCardConfig {
+  title?: string;
+  source_type?: "calendar" | "ha_epg";
+  source_calendar?: string;
+  source_entity?: string;
+  target_calendar: string;
+  copy_script: string;
+  days_to_show?: number;
+  sources?: TvPlannerSource[];
+}
+
+interface TvPlannerSource {
+  label: string;
+  entity: string;
+}
+
+interface TvPlannerEvent {
+  start: string;
+  end: string;
+  summary?: string;
+  description?: string;
+  location?: string;
+  channel_icon?: string;
+  source?: string;
+}
+
+type HassLike = {
+  states: Record<string, any>;
+  callService: (...args: any[]) => Promise<any>;
+};
+
 class TvPlannerCard extends LitElement {
+  private config?: TvPlannerCardConfig;
+  private events: TvPlannerEvent[] = [];
+  private loading = false;
+  private selectedSourceEntity = "";
+  private loaded = false;
+  private _hass?: HassLike;
+  private lastCopied = "";
 
   static styles = css`
     h2 {
@@ -67,7 +105,7 @@ class TvPlannerCard extends LitElement {
     }
   `;
 
-  setConfig(config) {
+  setConfig(config: TvPlannerCardConfig) {
     this.config = config;
     this.events = [];
     this.loading = false;
@@ -75,7 +113,7 @@ class TvPlannerCard extends LitElement {
       config.source_entity || config.sources?.[0]?.entity || "";
   }
 
-  set hass(hass) {
+  set hass(hass: HassLike) {
     this._hass = hass;
 
     if (!this.loaded) {
@@ -87,9 +125,10 @@ class TvPlannerCard extends LitElement {
   async loadEvents() {
     this.loading = true;
     this.requestUpdate();
+    const config = this.config!;
 
     try {
-      if (this.config.source_type === "ha_epg") {
+      if (config.source_type === "ha_epg") {
         this.loadHaEpgEvents();
       } else {
         await this.loadCalendarEvents();
@@ -106,9 +145,14 @@ class TvPlannerCard extends LitElement {
   async loadCalendarEvents() {
     const start = new Date();
     const end = new Date();
-    end.setDate(end.getDate() + (this.config.days_to_show || 14));
+    const config = this.config;
+    const hass = this._hass;
+    
+    if (!config || !hass || !config.source_calendar) return;
 
-    const response = await this._hass.callService(
+    end.setDate(end.getDate() + (config.days_to_show || 14));
+
+    const response = await hass.callService(
       "calendar",
       "get_events",
       {
@@ -116,7 +160,7 @@ class TvPlannerCard extends LitElement {
         end_date_time: end.toISOString(),
       },
       {
-        entity_id: this.config.source_calendar,
+        entity_id: config.source_calendar,
       },
       false,
       true,
@@ -130,14 +174,14 @@ class TvPlannerCard extends LitElement {
       this.events = data;
     } else if (data?.events) {
       this.events = data.events;
-    } else if (data?.[this.config.source_calendar]?.events) {
-      this.events = data[this.config.source_calendar].events;
+    } else if (data?.[config.source_calendar]?.events) {
+      this.events = data[config.source_calendar].events;
     } else {
       this.events = [];
     }
   }
 
-  async copyEvent(event) {
+  async copyEvent(event: TvPlannerEvent) {
     if (!event) {
       alert("Could not find this event.");
       return;
@@ -145,18 +189,31 @@ class TvPlannerCard extends LitElement {
 
     console.log("Calendar Copy Card selected event:", event);
 
+    const config = this.config;
+
+    if (!config) {
+      alert("Configuration not found.");
+      return;
+    }
+    
+    const hass = this._hass;
+    if (!hass) {
+      alert("Home Assistant connection not found.");
+      return;
+    }
+
     const ok = confirm(
-      `Copy "${event.summary}" to ${this.config.target_calendar}?`,
+      `Copy "${event.summary}" to ${config.target_calendar}?`,
     );
 
     if (!ok) return;
 
-    await this._hass.callService("script", this.config.copy_script, {
-      source_type: this.config.source_type || "calendar",
-      source_calendar: this.config.source_calendar || "",
+    await hass.callService("script", config.copy_script, {
+      source_type: config.source_type || "calendar",
+      source_calendar: config.source_calendar || "",
       source_entity:
-        this.selectedSourceEntity || this.config.source_entity || "",
-      target_calendar: this.config.target_calendar,
+        this.selectedSourceEntity || config.source_entity || "",
+      target_calendar: config.target_calendar,
       summary: event.summary || "",
       description: event.description || "",
       location: event.location || "",
@@ -304,31 +361,6 @@ class TvPlannerCard extends LitElement {
   //     </ha-card>
   //   `;
 
-  //   if (!this.listenersAttached) {
-  //     this.listenersAttached = true;
-
-  //     this.addEventListener("click", (ev) => {
-  //       const button = ev.target.closest("button");
-
-  //       if (!button) return;
-
-  //       if (button.id === "refresh") {
-  //         this.loadEvents();
-  //         return;
-  //       }
-
-  //       if (button.id === "browser-refresh") {
-  //         this._hass.callService("browser_mod", "refresh");
-  //         return;
-  //       }
-
-  //       if (button.classList.contains("copy")) {
-  //         const index = Number(button.dataset.index);
-  //         const event = this.events[index];
-  //         this.copyEvent(event);
-  //       }
-  //     });
-
   //     this.addEventListener("change", (ev) => {
   //       if (ev.target.id === "source-select") {
   //         this.selectedSourceEntity = ev.target.value;
@@ -339,40 +371,125 @@ class TvPlannerCard extends LitElement {
   // }
 
   render() {
+    if (!this._hass || !this.config) {
+      return html``;
+    }
+
     return html`
       <ha-card>
         <div class="card-content">
-          <h2>TV Planner Card</h2>
+          <h2>${this.config.title || "TV Planner Card"}</h2>
+
+          <button id="refresh" @click=${this.loadEvents}>
+            Reload events
+          </button>
+
+          <button id="browser-refresh" @click=${this.refreshDashboard}>
+            Refresh dashboard
+          </button>
+
+          ${this.lastCopied
+            ? html`<p class="success">Copied: ${this.lastCopied}</p>`
+            : html``}
+
+          ${this.renderSourceSelector()}
+
+          ${this.loading
+            ? html`<p>Loading events...</p>`
+            : this.events.length === 0
+              ? html`<p>No events found.</p>`
+              : this.renderEventGroups()}
         </div>
       </ha-card>
     `;
   }
 
-  renderSourceSelector() {
-    if (!this.config.sources?.length) return "";
+  renderEventGroups() {
+    return Object.entries(this.groupEventsByDay()).map(
+      ([day, events]) => html`
+        <div class="day-separator">
+          ${events[0] ? this.formatDay(events[0].start) : ""}
+        </div>
 
-    return `
+        ${events.map((event) => this.renderEvent(event))}
+      `
+    );
+  }
+
+  renderEvent(event: TvPlannerEvent) {
+    return html`
+      <div class="event">
+        <div class="event-main">
+          <strong>${event.summary || "(No title)"}</strong>
+
+          <div class="time">
+            ${this.formatDate(event.start)}
+            →
+            ${this.formatDate(event.end)}
+          </div>
+
+          ${event.description
+            ? html`<div class="description">${event.description}</div>`
+            : html``}
+        </div>
+
+        <button class="copy" @click=${() => this.copyEvent(event)}>
+          Copy
+        </button>
+      </div>
+    `;
+  }
+
+  refreshDashboard() {
+    const hass = this._hass;
+    if (!hass) {
+      alert("Home Assistant connection not found.");
+      return;
+    }
+
+    hass.callService("browser_mod", "refresh");
+  }
+
+  renderSourceSelector() {
+    const config = this.config;
+
+    if (!config) {
+      alert("Configuration not found.");
+      return;
+    }
+
+    if (!config.sources?.length) {
+      return html``;
+    }
+
+    return html`
       <div class="source-selector">
         <label for="source-select">Channel</label>
-        <select id="source-select">
-          ${this.config.sources
-            .map(
-              (source) => `
-                <option
-                  value="${source.entity}"
-                  ${source.entity === this.selectedSourceEntity ? "selected" : ""}
-                >
-                  ${source.label}
-                </option>
-              `,
-            )
-            .join("")}
+
+        <select
+          id="source-select"
+          .value=${this.selectedSourceEntity}
+          @change=${this.sourceChanged}
+        >
+          ${config.sources.map(
+            (source) => html`
+              <option value=${source.entity}>
+                ${source.label}
+              </option>
+            `
+          )}
         </select>
       </div>
     `;
   }
 
-  formatDate(value) {
+  sourceChanged(ev: Event) {
+    const target = ev.target as HTMLSelectElement;
+    this.selectedSourceEntity = target.value;
+    this.loadEvents();
+  }
+
+  formatDate(value: string) {
     if (!value) return "";
     return new Date(value).toLocaleString(undefined, {
       weekday: "short",
@@ -383,16 +500,20 @@ class TvPlannerCard extends LitElement {
     });
   }
 
-  groupEventsByDay() {
-    return this.events.reduce((groups, event) => {
+  groupEventsByDay(): Record<string, TvPlannerEvent[]> {
+    return this.events.reduce<Record<string, TvPlannerEvent[]>>((groups, event) => {
       const key = new Date(event.start).toDateString();
-      if (!groups[key]) groups[key] = [];
+
+      if (!groups[key]) {
+        groups[key] = [];
+      }
+
       groups[key].push(event);
       return groups;
     }, {});
   }
 
-  formatDay(value) {
+  formatDay(value: string) {
     return new Date(value).toLocaleDateString(undefined, {
       weekday: "long",
       day: "numeric",
@@ -405,7 +526,13 @@ class TvPlannerCard extends LitElement {
   }
 
   loadHaEpgEvents() {
-    const entity = this._hass.states[this.selectedSourceEntity];
+    const hass = this._hass;
+    if (!hass) {
+      alert("Home Assistant connection not found.");
+      return;
+    }
+
+    const entity = hass.states[this.selectedSourceEntity];
 
     if (!entity) {
       console.error(
@@ -431,13 +558,13 @@ class TvPlannerCard extends LitElement {
     this.events = [...today, ...tomorrow];
   }
 
-  epgDayToEvents(dayData, dayOffset, channelName, channelIcon) {
+  epgDayToEvents(dayData: any, dayOffset: number, channelName: string, channelIcon: string) {
     if (!dayData) return [];
 
     const baseDate = new Date();
     baseDate.setDate(baseDate.getDate() + dayOffset);
 
-    return Object.values(dayData).map((program) => {
+    return Object.values(dayData).map((program: any) => {
       const start = this.combineDateAndTime(baseDate, program.start);
       let end = this.combineDateAndTime(baseDate, program.end);
 
@@ -461,8 +588,11 @@ class TvPlannerCard extends LitElement {
     });
   }
 
-  combineDateAndTime(date, time) {
-    const [hours, minutes] = time.split(":").map(Number);
+  combineDateAndTime(date: Date, time: string) {
+    const parts = time.split(":").map(Number);
+
+    const hours = parts[0] ?? 0;
+    const minutes = parts[1] ?? 0;
 
     const result = new Date(date);
     result.setHours(hours, minutes, 0, 0);
