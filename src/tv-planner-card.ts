@@ -83,9 +83,10 @@ interface HaEpgProgramLike {
 
 class TvPlannerCard extends LitElement {
   @property({ attribute: false })
-  public config?: TvPlannerCardConfig;
 
+  public config?: TvPlannerCardConfig;
   private _hass?: HassLike;
+  private dashboardRefreshTimeout?: number | undefined;
 
   @state() private events: TvPlannerEvent[] = [];
   @state() private loading = false;
@@ -399,11 +400,18 @@ class TvPlannerCard extends LitElement {
     const hass = this._hass;
 
     if (!hass) {
-      alert("Home Assistant connection not found.");
+      alert(this.t("ha_connection_not_found"));
       return;
     }
 
-    hass.callService("browser_mod", "refresh");
+    if (this.dashboardRefreshTimeout) {
+      window.clearTimeout(this.dashboardRefreshTimeout);
+    }
+
+    this.dashboardRefreshTimeout = window.setTimeout(() => {
+      hass.callService("browser_mod", "refresh");
+      this.dashboardRefreshTimeout = undefined;
+    }, 300);
   }
 
   private async copyEvent(event: TvPlannerEvent) {
