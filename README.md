@@ -221,19 +221,19 @@ sources:
 
 ## Configuration
 
-| Option | Type | Description |
-| --- | --- | --- |
-| `title` | string | Card title |
-| `source_type` | `calendar` \| `ha_epg` | Source provider type |
-| `source_calendar` | string | Calendar entity used as source |
-| `source_entity` | string | Single HA-EPG source entity |
-| `sources` | list | Multiple selectable HA-EPG sources |
-| `target_calendar` | string | Target calendar entity |
-| `copy_script` | string | Script used for copying events |
-| `days_to_show` | number | Number of days to display |
-| `channel_icons` | object | Inline channel icon mappings |
-| `channel_icons_url` | string | External JSON icon database |
-| `description_mode` | string | `hidden`, `visible`, `toggle-on`, `toggle-off` |
+| Option              | Type                   | Description                                    |
+| ------------------- | ---------------------- | ---------------------------------------------- |
+| `title`             | string                 | Card title                                     |
+| `source_type`       | `calendar` \| `ha_epg` | Source provider type                           |
+| `source_calendar`   | string                 | Calendar entity used as source                 |
+| `source_entity`     | string                 | Single HA-EPG source entity                    |
+| `sources`           | list                   | Multiple selectable HA-EPG sources             |
+| `target_calendar`   | string                 | Target calendar entity                         |
+| `copy_script`       | string                 | Script used for copying events                 |
+| `days_to_show`      | number                 | Number of days to display                      |
+| `channel_icons`     | object                 | Inline channel icon mappings                   |
+| `channel_icons_url` | string                 | External JSON icon database                    |
+| `description_mode`  | string                 | `hidden`, `visible`, `toggle-on`, `toggle-off` |
 
 ---
 
@@ -328,14 +328,14 @@ sequence:
 /config/www/
 ```
 
-2. Add as a dashboard resource:
+1. Add as a dashboard resource:
 
 ```yaml
 url: /local/tv-planner-card.js
 type: module
 ```
 
-3. Restart the Home Assistant frontend, or hard-refresh the browser.
+1. Restart the Home Assistant frontend, or hard-refresh the browser.
 
 ---
 

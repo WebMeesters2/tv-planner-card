@@ -1,9 +1,12 @@
 import { LitElement, html, css } from "lit";
 import { property, state } from "lit/decorators.js";
+import { localize } from "./localize";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
+
+import type { TranslationKey } from "./localize";
 
 type SourceType = "calendar" | "ha_epg";
 type EventSource = "calendar" | "ha_epg";
@@ -23,6 +26,8 @@ interface TvPlannerCardConfig {
   browser_refresh_after_copy?: boolean;
   show_description?: boolean;
   description_mode?: "hidden" | "visible" | "toggle-on" | "toggle-off";
+  language?: "en" | "nl";
+  debug?: boolean;
 }
 
 interface TvPlannerSource {
@@ -245,22 +250,22 @@ class TvPlannerCard extends LitElement {
     return html`
       <ha-card>
         <div class="card-content">
-          <h2>${this.config.title || "TV Planner Card"}</h2>
+          <h2>${this.config.title || this.t("title_default")}</h2>
 
           <button
             id="refresh"
             ?disabled=${this.loading}
             @click=${() => this.loadEvents()}
           >
-            ${this.loading ? "Loading..." : "Reload events"}
+            ${this.loading ? this.t("loading_events") : this.t("reload_events")}
           </button>
 
           <button id="browser-refresh" @click=${() => this.refreshDashboard()}>
-            Refresh dashboard
+            ${this.t("refresh_dashboard")}
           </button>
 
           ${this.lastCopied
-            ? html`<p class="success">Copied: ${this.lastCopied}</p>`
+            ? html`<p class="success">${this.t("copied")}: ${this.lastCopied}</p>`
             : html``}
           ${this.renderSourceSelector()} ${this.renderBody()}
         </div>
@@ -270,15 +275,15 @@ class TvPlannerCard extends LitElement {
 
   private renderBody() {
     if (this.loading) {
-      return html`<p>Loading events...</p>`;
+      return html`<p>${this.t("loading_events")}</p>`;
     }
 
     if (this.errorMessage) {
-      return html`<p class="error">Error: ${this.errorMessage}</p>`;
+      return html`<p class="error">${this.t("error")}: ${this.errorMessage}</p>`;
     }
 
     if (this.events.length === 0) {
-      return html`<p>No events found.</p>`;
+      return html`<p>${this.t("no_events_found")}</p>`;
     }
 
     return this.renderEventGroups();
@@ -293,7 +298,7 @@ class TvPlannerCard extends LitElement {
 
     return html`
       <div class="source-selector">
-        <label for="source-select">Channel</label>
+        <label for="source-select">${this.t("channel")}</label>
 
         <select
           id="source-select"
@@ -324,7 +329,9 @@ class TvPlannerCard extends LitElement {
 
   private renderEvent(event: TvPlannerEvent) {
     const icon = this.getEventIcon(event);
-    console.log("TV Planner Card render event:", event);
+    // DEBUG code to log event data for troubleshooting
+    // REMOVE LATER!
+    this.debugLog("render event:", event);
     return html`
       <div class="event">
         <div class="event-main">
@@ -334,7 +341,7 @@ class TvPlannerCard extends LitElement {
               : html``}
 
             <strong class="event-title"
-              >${event.summary || "Unknown Event"}</strong
+              >${event.summary || this.t("unknown_event")}</strong
             >
           </div>
 
@@ -345,7 +352,7 @@ class TvPlannerCard extends LitElement {
           ${this.renderDescription(event)}
         </div>
 
-        <button class="copy" @click=${() => this.copyEvent(event)}>Copy</button>
+        <button class="copy" @click=${() => this.copyEvent(event)}>${this.t("copy")}:</button>
       </div>
     `;
   }
@@ -370,7 +377,7 @@ class TvPlannerCard extends LitElement {
         class="description-toggle"
         @click=${() => this.toggleEventDescription(event)}
       >
-        ${expanded ? "▼ Hide description" : "▶ Show description"}
+        ${expanded ? this.t("hide_description") : this.t("show_description")}
       </div>
 
       ${expanded
@@ -405,16 +412,16 @@ class TvPlannerCard extends LitElement {
     const hass = this._hass;
 
     if (!config) {
-      alert("Configuration not found.");
+      alert(this.t("config_not_found"));
       return;
     }
 
     if (!hass) {
-      alert("Home Assistant connection not found.");
+      alert(this.t("ha_connection_not_found"));
       return;
     }
 
-    const ok = confirm(`Copy "${event.summary}" to ${config.target_calendar}?`);
+    const ok = confirm(this.t("confirm_copy", { event: event.summary, calendar: config.target_calendar }));
     if (!ok) return;
 
     await hass.callService("script", config.copy_script, {
@@ -502,7 +509,7 @@ class TvPlannerCard extends LitElement {
       true,
     );
 
-    console.log("TV Planner Card calendar response:", response);
+    this.debugLog("calendar response:", response);
 
     const rawEvents = this.extractCalendarEvents(
       response,
@@ -738,7 +745,7 @@ class TvPlannerCard extends LitElement {
     }
 
     if (event.summary.includes("|")) {
-      return event.summary?.split("|")[0]?.trim() ?? "Unknown Event";
+      return event.summary?.split("|")[0]?.trim() ?? this.t("unknown_event");
     }
 
     return "";
@@ -892,6 +899,28 @@ class TvPlannerCard extends LitElement {
 
   private asString(value: unknown): string {
     return typeof value === "string" ? value : "";
+  }
+
+  private isDebugEnabled(): boolean {
+    return this.config?.debug === true;
+  }
+
+  private debugLog(message: string, ...args: unknown[]) {
+    if (!this.isDebugEnabled()) {
+      return;
+    }
+
+    console.debug(`TV Planner Card: ${message}`, ...args);
+  }
+
+  /* ------------------------------------------------------------------------ */
+  /* Translation helper                                                       */
+  /* ------------------------------------------------------------------------ */
+  private t(
+    key: TranslationKey,
+    replacements: Record<string, string> = {},
+  ): string {
+    return localize(this.config?.language, key, replacements);
   }
 }
 
