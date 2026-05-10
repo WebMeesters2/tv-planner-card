@@ -1,12 +1,11 @@
 import { LitElement, html, css } from "lit";
 import { property, state } from "lit/decorators.js";
-import { localize } from "./localize";
+import { localize } from "./localize.js";
+import type { TranslationKey } from "./localize.js";
 
 /* -------------------------------------------------------------------------- */
 /* Types                                                                      */
 /* -------------------------------------------------------------------------- */
-
-import type { TranslationKey } from "./localize";
 
 type SourceType = "calendar" | "ha_epg";
 type EventSource = "calendar" | "ha_epg";

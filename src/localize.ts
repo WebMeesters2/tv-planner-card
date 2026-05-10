@@ -62,7 +62,7 @@ export function localize(
   const selectedLanguage: Language =
     language && language in translations ? (language as Language) : "en";
 
-  let text = translations[selectedLanguage][key] || translations.en[key];
+  let text: string = translations[selectedLanguage][key] || translations.en[key];
 
   Object.entries(replacements).forEach(([name, value]) => {
     text = text.replaceAll(`{${name}}`, value);

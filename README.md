@@ -40,6 +40,7 @@ The automatic TV switching automation itself will eventually become a separate p
 - Lightweight frontend-only architecture
 - Mobile-friendly layout
 - Non-destructive copy workflow
+- Internationalisation (English-Dutch now)
 
 ---
 
@@ -178,7 +179,6 @@ description_mode: toggle-on
 - Bulk copy operations
 - Drag/drop planning
 - Responsive/mobile layouts
-- Internationalisation / translations
 
 ---
 
