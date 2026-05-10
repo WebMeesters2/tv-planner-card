@@ -19,6 +19,10 @@ interface TvPlannerCardConfig {
   sources?: TvPlannerSource[];
   channel_icons_url?: string;
   channel_icons?: Record<string, string>;
+  refresh_after_copy?: boolean;
+  browser_refresh_after_copy?: boolean;
+  show_description?: boolean;
+  description_mode?: "hidden" | "visible" | "toggle-on" | "toggle-off";
 }
 
 interface TvPlannerSource {
@@ -86,6 +90,7 @@ class TvPlannerCard extends LitElement {
   @state() private loaded = false;
   @state() private errorMessage = "";
   @state() private externalChannelIcons: Record<string, string> = {};
+  @state() private expandedEvents: Record<string, boolean> = {};
 
   /* ------------------------------------------------------------------------ */
   /* Styles                                                                   */
@@ -139,6 +144,11 @@ class TvPlannerCard extends LitElement {
       letter-spacing: 0.04em;
     }
 
+    button[disabled] {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
     .success,
     .error {
       font-size: 0.9em;
@@ -163,10 +173,20 @@ class TvPlannerCard extends LitElement {
       flex: 1;
     }
 
+    .event-main {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
     .event-title-row {
       display: flex;
       align-items: center;
       gap: 8px;
+      min-width: 0;
+    }
+
+    .event-title {
+      overflow-wrap: anywhere;
     }
 
     .channel-icon {
@@ -174,6 +194,14 @@ class TvPlannerCard extends LitElement {
       height: 28px;
       object-fit: contain;
       flex: 0 0 auto;
+    }
+
+    .description-toggle {
+      margin-top: 4px;
+      cursor: pointer;
+      color: var(--accent-color);
+      font-size: 0.9em;
+      user-select: none;
     }
   `;
 
@@ -219,8 +247,12 @@ class TvPlannerCard extends LitElement {
         <div class="card-content">
           <h2>${this.config.title || "TV Planner Card"}</h2>
 
-          <button id="refresh" @click=${() => this.loadEvents()}>
-            Reload events
+          <button
+            id="refresh"
+            ?disabled=${this.loading}
+            @click=${() => this.loadEvents()}
+          >
+            ${this.loading ? "Loading..." : "Reload events"}
           </button>
 
           <button id="browser-refresh" @click=${() => this.refreshDashboard()}>
@@ -292,7 +324,7 @@ class TvPlannerCard extends LitElement {
 
   private renderEvent(event: TvPlannerEvent) {
     const icon = this.getEventIcon(event);
-
+    console.log("TV Planner Card render event:", event);
     return html`
       <div class="event">
         <div class="event-main">
@@ -301,20 +333,49 @@ class TvPlannerCard extends LitElement {
               ? html`<img class="channel-icon" src=${icon} alt="" />`
               : html``}
 
-            <strong>${event.summary || "(No title)"}</strong>
+            <strong class="event-title"
+              >${event.summary || "Unknown Event"}</strong
+            >
           </div>
 
           <div class="time">
             ${this.formatDate(event.start)} → ${this.formatDate(event.end)}
           </div>
 
-          ${event.description
-            ? html`<div class="description">${event.description}</div>`
-            : html``}
+          ${this.renderDescription(event)}
         </div>
 
         <button class="copy" @click=${() => this.copyEvent(event)}>Copy</button>
       </div>
+    `;
+  }
+
+  private renderDescription(event: TvPlannerEvent) {
+    const mode = this.config?.description_mode || "visible";
+
+    if (!event.description || mode === "hidden") {
+      return html``;
+    }
+
+    if (mode === "visible") {
+      return html`<div class="description">${event.description}</div>`;
+    }
+
+    const key = this.getEventKey(event);
+    const defaultExpanded = mode === "toggle-on";
+    const expanded = this.expandedEvents[key] ?? defaultExpanded;
+
+    return html`
+      <div
+        class="description-toggle"
+        @click=${() => this.toggleEventDescription(event)}
+      >
+        ${expanded ? "▼ Hide description" : "▶ Show description"}
+      </div>
+
+      ${expanded
+        ? html`<div class="description">${event.description}</div>`
+        : html``}
     `;
   }
 
@@ -369,6 +430,14 @@ class TvPlannerCard extends LitElement {
     });
 
     this.lastCopied = event.summary || "Event";
+
+    if (config.refresh_after_copy) {
+      await this.loadEvents();
+    }
+
+    if (config.browser_refresh_after_copy) {
+      await hass.callService("browser_mod", "refresh");
+    }
   }
 
   /* ------------------------------------------------------------------------ */
@@ -376,6 +445,10 @@ class TvPlannerCard extends LitElement {
   /* ------------------------------------------------------------------------ */
 
   private async loadEvents() {
+    if (this.loading) {
+      return;
+    }
+
     this.loading = true;
     this.errorMessage = "";
 
@@ -665,7 +738,7 @@ class TvPlannerCard extends LitElement {
     }
 
     if (event.summary.includes("|")) {
-      return event.summary.split("|")[0].trim();
+      return event.summary?.split("|")[0]?.trim() ?? "Unknown Event";
     }
 
     return "";
@@ -789,6 +862,21 @@ class TvPlannerCard extends LitElement {
   /* ------------------------------------------------------------------------ */
   /* Generic parsing helpers                                                  */
   /* ------------------------------------------------------------------------ */
+
+  private getEventKey(event: TvPlannerEvent): string {
+    return [event.start, event.end, event.summary].join("|");
+  }
+
+  private toggleEventDescription(event: TvPlannerEvent) {
+    const key = this.getEventKey(event);
+    const mode = this.config?.description_mode || "visible";
+    const defaultExpanded = mode === "toggle-on";
+
+    this.expandedEvents = {
+      ...this.expandedEvents,
+      [key]: !(this.expandedEvents[key] ?? defaultExpanded),
+    };
+  }
 
   private getResponsePayload(response: unknown): unknown {
     if (this.isRecord(response) && "response" in response) {

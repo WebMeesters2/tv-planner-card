@@ -564,7 +564,7 @@ function Q(e, t, n, r) {
 //#region src/tv-planner-card.ts
 var $ = class extends Y {
 	constructor(...e) {
-		super(...e), this.events = [], this.loading = !1, this.selectedSourceEntity = "", this.lastCopied = "", this.loaded = !1, this.errorMessage = "", this.externalChannelIcons = {};
+		super(...e), this.events = [], this.loading = !1, this.selectedSourceEntity = "", this.lastCopied = "", this.loaded = !1, this.errorMessage = "", this.externalChannelIcons = {}, this.expandedEvents = {};
 	}
 	static {
 		this.styles = o`
@@ -615,6 +615,11 @@ var $ = class extends Y {
       letter-spacing: 0.04em;
     }
 
+    button[disabled] {
+      opacity: 0.6;
+      cursor: wait;
+    }
+
     .success,
     .error {
       font-size: 0.9em;
@@ -639,10 +644,20 @@ var $ = class extends Y {
       flex: 1;
     }
 
+    .event-main {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
+
     .event-title-row {
       display: flex;
       align-items: center;
       gap: 8px;
+      min-width: 0;
+    }
+
+    .event-title {
+      overflow-wrap: anywhere;
     }
 
     .channel-icon {
@@ -650,6 +665,14 @@ var $ = class extends Y {
       height: 28px;
       object-fit: contain;
       flex: 0 0 auto;
+    }
+
+    .description-toggle {
+      margin-top: 4px;
+      cursor: pointer;
+      color: var(--accent-color);
+      font-size: 0.9em;
+      user-select: none;
     }
   `;
 	}
@@ -668,8 +691,12 @@ var $ = class extends Y {
         <div class="card-content">
           <h2>${this.config.title || "TV Planner Card"}</h2>
 
-          <button id="refresh" @click=${() => this.loadEvents()}>
-            Reload events
+          <button
+            id="refresh"
+            ?disabled=${this.loading}
+            @click=${() => this.loadEvents()}
+          >
+            ${this.loading ? "Loading..." : "Reload events"}
           </button>
 
           <button id="browser-refresh" @click=${() => this.refreshDashboard()}>
@@ -714,24 +741,42 @@ var $ = class extends Y {
 	}
 	renderEvent(e) {
 		let t = this.getEventIcon(e);
-		return R`
+		return console.log("TV Planner Card render event:", e), R`
       <div class="event">
         <div class="event-main">
           <div class="event-title-row">
             ${t ? R`<img class="channel-icon" src=${t} alt="" />` : R``}
 
-            <strong>${e.summary || "(No title)"}</strong>
+            <strong class="event-title"
+              >${e.summary || "Unknown Event"}</strong
+            >
           </div>
 
           <div class="time">
             ${this.formatDate(e.start)} → ${this.formatDate(e.end)}
           </div>
 
-          ${e.description ? R`<div class="description">${e.description}</div>` : R``}
+          ${this.renderDescription(e)}
         </div>
 
         <button class="copy" @click=${() => this.copyEvent(e)}>Copy</button>
       </div>
+    `;
+	}
+	renderDescription(e) {
+		let t = this.config?.description_mode || "visible";
+		if (!e.description || t === "hidden") return R``;
+		if (t === "visible") return R`<div class="description">${e.description}</div>`;
+		let n = this.getEventKey(e), r = t === "toggle-on", i = this.expandedEvents[n] ?? r;
+		return R`
+      <div
+        class="description-toggle"
+        @click=${() => this.toggleEventDescription(e)}
+      >
+        ${i ? "▼ Hide description" : "▶ Show description"}
+      </div>
+
+      ${i ? R`<div class="description">${e.description}</div>` : R``}
     `;
 	}
 	sourceChanged(e) {
@@ -766,21 +811,23 @@ var $ = class extends Y {
 			location: e.location,
 			start_date_time: e.start,
 			end_date_time: e.end
-		}), this.lastCopied = e.summary || "Event");
+		}), this.lastCopied = e.summary || "Event", t.refresh_after_copy && await this.loadEvents(), t.browser_refresh_after_copy && await n.callService("browser_mod", "refresh"));
 	}
 	async loadEvents() {
-		this.loading = !0, this.errorMessage = "";
-		try {
-			let e = this.config;
-			if (!e) {
-				this.events = [];
-				return;
+		if (!this.loading) {
+			this.loading = !0, this.errorMessage = "";
+			try {
+				let e = this.config;
+				if (!e) {
+					this.events = [];
+					return;
+				}
+				e.source_type === "ha_epg" ? this.loadHaEpgEvents() : await this.loadCalendarEvents();
+			} catch (e) {
+				console.error("TV Planner Card: failed to load events", e), this.events = [], this.errorMessage = e instanceof Error ? e.message : "Failed to load events";
+			} finally {
+				this.loading = !1;
 			}
-			e.source_type === "ha_epg" ? this.loadHaEpgEvents() : await this.loadCalendarEvents();
-		} catch (e) {
-			console.error("TV Planner Card: failed to load events", e), this.events = [], this.errorMessage = e instanceof Error ? e.message : "Failed to load events";
-		} finally {
-			this.loading = !1;
 		}
 	}
 	async loadCalendarEvents() {
@@ -888,7 +935,7 @@ var $ = class extends Y {
 		}
 	}
 	getEventChannel(e) {
-		return e.location ? e.location.trim() : e.summary.includes("|") ? e.summary.split("|")[0].trim() : "";
+		return e.location ? e.location.trim() : e.summary.includes("|") ? e.summary?.split("|")[0]?.trim() ?? "Unknown Event" : "";
 	}
 	getCombinedChannelIcons() {
 		let e = {};
@@ -948,6 +995,20 @@ var $ = class extends Y {
 		let [n = 0, r = 0] = t.split(":").map(Number), i = new Date(e);
 		return i.setHours(n, r, 0, 0), i;
 	}
+	getEventKey(e) {
+		return [
+			e.start,
+			e.end,
+			e.summary
+		].join("|");
+	}
+	toggleEventDescription(e) {
+		let t = this.getEventKey(e), n = (this.config?.description_mode || "visible") === "toggle-on";
+		this.expandedEvents = {
+			...this.expandedEvents,
+			[t]: !(this.expandedEvents[t] ?? n)
+		};
+	}
 	getResponsePayload(e) {
 		return this.isRecord(e) && "response" in e ? e.response : e;
 	}
@@ -958,7 +1019,7 @@ var $ = class extends Y {
 		return typeof e == "string" ? e : "";
 	}
 };
-Q([X({ attribute: !1 })], $.prototype, "config", void 0), Q([Z()], $.prototype, "events", void 0), Q([Z()], $.prototype, "loading", void 0), Q([Z()], $.prototype, "selectedSourceEntity", void 0), Q([Z()], $.prototype, "lastCopied", void 0), Q([Z()], $.prototype, "loaded", void 0), Q([Z()], $.prototype, "errorMessage", void 0), Q([Z()], $.prototype, "externalChannelIcons", void 0), customElements.define("tv-planner-card", $);
+Q([X({ attribute: !1 })], $.prototype, "config", void 0), Q([Z()], $.prototype, "events", void 0), Q([Z()], $.prototype, "loading", void 0), Q([Z()], $.prototype, "selectedSourceEntity", void 0), Q([Z()], $.prototype, "lastCopied", void 0), Q([Z()], $.prototype, "loaded", void 0), Q([Z()], $.prototype, "errorMessage", void 0), Q([Z()], $.prototype, "externalChannelIcons", void 0), Q([Z()], $.prototype, "expandedEvents", void 0), customElements.define("tv-planner-card", $);
 //#endregion
 
 //# sourceMappingURL=tv-planner-card.js.map
