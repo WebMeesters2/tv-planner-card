@@ -31,15 +31,19 @@ The automatic TV switching automation itself will eventually become a separate p
 
 ## Features
 
-- Browse calendar events
-- Browse HA-EPG program listings
+- Browse Home Assistant calendar events
+- Browse HA-EPG/Open-EPG program listings
 - Copy selected items into Home Assistant calendars
 - Group events by day
 - Multi-channel EPG selection
+- Channel icon support
+- External channel icon JSON support
+- Configurable description display modes
 - Manual refresh controls
+- Browser Mod dashboard refresh integration
 - Lightweight frontend-only architecture
-- No destructive "move/delete" logic
 - Mobile-friendly layout
+- Non-destructive copy workflow
 
 ---
 
@@ -71,11 +75,100 @@ The automatic TV switching automation itself will eventually become a separate p
 
 ---
 
+## Channel Icons
+
+The card supports multiple channel icon lookup methods:
+
+1. Native HA-EPG channel_icon attributes
+2. Explicit channel_icons configuration
+3. External JSON icon databases via channel_icons_url
+
+### Example: explicit icon configuration
+
+```YAML
+type: custom:tv-planner-card
+source_type: calendar
+
+channel_icons:
+  NPO 1: https://images.open-epg.com/8617.png
+  NPO1: https://images.open-epg.com/8617.png
+  SBS6: https://images.open-epg.com/8664.png
+```
+
+### Example: external JSON icon database
+
+```YAML
+type: custom:tv-planner-card
+channel_icons_url: /local/channel-icons.json
+```
+
+### Example JSON
+
+```JSON
+{
+  "NPO 1": "https://images.open-epg.com/8617.png",
+  "NPO1": "https://images.open-epg.com/8617.png",
+  "SBS6": "https://images.open-epg.com/8664.png"
+}
+```
+
+The card automatically generates and matches normalized aliases such as:
+
+- NPO 1 ↔ NPO1
+- SBS6 ↔ SBS 6
+- BBC NL ↔ BBCNL
+
+## Description Modes
+
+The card supports configurable description visibility.
+
+### Always visible (default)
+
+```YAML
+description_mode: visible
+```
+
+### Completely hidden
+
+```YAML
+description_mode: hidden
+```
+
+### Expand/collapse descriptions (collapsed by default)
+
+```YAML
+description_mode: toggle-off
+```
+
+### Expand/collapse descriptions (expanded by default)
+
+```YAML
+description_mode: toggle-on
+```
+
+## Configuration
+
+| Option | Type | Description |
+| ------ | ---- | ----------- |
+| title | string | Card title |
+| source_type | calendar \| ha_epg | Source provider type |
+| source_calendar | string | Calendar entity used as source |
+| source_entity | string | Single HA-EPG source entity |
+| sources | list | Multiple selectable HA-EPG sources |
+| target_calendar | string | Target calendar entity |
+| copy_script | string | Script used for copying events |
+| days_to_show | number | Number of days to display |
+| channel_icons | object | Inline channel icon mappings |
+| channel_icons_url | string | External JSON icon database |
+| description_mode | string | hidden, visible, toggle-on, toggle-off |
+
+---
+
 ## Current Status
 
-⚠️ Early alpha / proof-of-concept
+⚠️ Active development project
 
-This project is currently under active development and APIs/configuration may change frequently.
+The card is already fully usable for daily workflows, but configuration options and APIs may still evolve between versions.
 
 ---
 
@@ -100,10 +193,10 @@ This project is currently under active development and APIs/configuration may ch
 - Additional EPG providers
 - Search and filtering
 - Duplicate detection
-- Channel icons
 - Bulk copy operations
 - Drag/drop planning
 - Responsive/mobile layouts
+- Internationalisation / translations
 
 ---
 
@@ -243,6 +336,27 @@ type: module
 ```
 
 3. Restart the Home Assistant frontend, or hard-refresh the browser.
+
+---
+
+## Development
+
+Project stack:
+
+- TypeScript
+- Lit
+- Vite
+
+Build:
+
+```Bash
+npm install
+npm run build
+```
+
+The generated frontend bundle is:
+
+`dist/tv-planner-card.js`
 
 ---
 
