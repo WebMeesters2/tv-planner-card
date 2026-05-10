@@ -1,9 +1,5 @@
 # tv-planner-card
 
-A Home Assistant custom Lovelace card for browsing EPG/program sources and copying selected items to calendars.
-
-# TV Planner Card
-
 A custom Lovelace card for Home Assistant that allows browsing TV/EPG program sources and copying selected programs into Home Assistant calendars.
 
 The project started as a personal workflow tool for curating TV schedules from multiple EPG sources into a final “watch list” calendar, but is designed to support generic scheduling and planning workflows as well.
@@ -44,6 +40,14 @@ The automatic TV switching automation itself will eventually become a separate p
 - Lightweight frontend-only architecture
 - Mobile-friendly layout
 - Non-destructive copy workflow
+
+---
+
+## Current Status
+
+⚠️ Active development project
+
+The card is already fully usable for daily workflows, but configuration options and APIs may still evolve between versions.
 
 ---
 
@@ -118,6 +122,8 @@ The card automatically generates and matches normalized aliases such as:
 - SBS6 ↔ SBS 6
 - BBC NL ↔ BBCNL
 
+---
+
 ## Description Modes
 
 The card supports configurable description visibility.
@@ -145,30 +151,6 @@ description_mode: toggle-off
 ```YAML
 description_mode: toggle-on
 ```
-
-## Configuration
-
-| Option | Type | Description |
-| ------ | ---- | ----------- |
-| title | string | Card title |
-| source_type | calendar \| ha_epg | Source provider type |
-| source_calendar | string | Calendar entity used as source |
-| source_entity | string | Single HA-EPG source entity |
-| sources | list | Multiple selectable HA-EPG sources |
-| target_calendar | string | Target calendar entity |
-| copy_script | string | Script used for copying events |
-| days_to_show | number | Number of days to display |
-| channel_icons | object | Inline channel icon mappings |
-| channel_icons_url | string | External JSON icon database |
-| description_mode | string | hidden, visible, toggle-on, toggle-off |
-
----
-
-## Current Status
-
-⚠️ Active development project
-
-The card is already fully usable for daily workflows, but configuration options and APIs may still evolve between versions.
 
 ---
 
@@ -234,6 +216,24 @@ sources:
   - label: SBS6
     entity: sensor.epg_sbs6
 ```
+
+---
+
+## Configuration
+
+| Option | Type | Description |
+| --- | --- | --- |
+| `title` | string | Card title |
+| `source_type` | `calendar` \| `ha_epg` | Source provider type |
+| `source_calendar` | string | Calendar entity used as source |
+| `source_entity` | string | Single HA-EPG source entity |
+| `sources` | list | Multiple selectable HA-EPG sources |
+| `target_calendar` | string | Target calendar entity |
+| `copy_script` | string | Script used for copying events |
+| `days_to_show` | number | Number of days to display |
+| `channel_icons` | object | Inline channel icon mappings |
+| `channel_icons_url` | string | External JSON icon database |
+| `description_mode` | string | `hidden`, `visible`, `toggle-on`, `toggle-off` |
 
 ---
 
