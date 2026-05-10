@@ -733,7 +733,7 @@ var $ = class extends J {
 		return !this._hass || !this.config ? L`` : L`
       <ha-card>
         <div class="card-content">
-          <h2>${this.config.title || "TV Planner Card"}</h2>
+          <h2>${this.config.title || this.t("title_default")}</h2>
 
           <button
             id="refresh"
@@ -747,20 +747,20 @@ var $ = class extends J {
             ${this.t("refresh_dashboard")}
           </button>
 
-          ${this.lastCopied ? L`<p class="success">Copied: ${this.lastCopied}</p>` : L``}
+          ${this.lastCopied ? L`<p class="success">${this.t("copied")}: ${this.lastCopied}</p>` : L``}
           ${this.renderSourceSelector()} ${this.renderBody()}
         </div>
       </ha-card>
     `;
 	}
 	renderBody() {
-		return this.loading ? L`<p>Loading events...</p>` : this.errorMessage ? L`<p class="error">Error: ${this.errorMessage}</p>` : this.events.length === 0 ? L`<p>No events found.</p>` : this.renderEventGroups();
+		return this.loading ? L`<p>${this.t("loading_events")}</p>` : this.errorMessage ? L`<p class="error">${this.t("error")}: ${this.errorMessage}</p>` : this.events.length === 0 ? L`<p>${this.t("no_events_found")}</p>` : this.renderEventGroups();
 	}
 	renderSourceSelector() {
 		let e = this.config?.sources;
 		return e?.length ? L`
       <div class="source-selector">
-        <label for="source-select">Channel</label>
+        <label for="source-select">${this.t("channel")}</label>
 
         <select
           id="source-select"
@@ -785,14 +785,14 @@ var $ = class extends J {
 	}
 	renderEvent(e) {
 		let t = this.getEventIcon(e);
-		return console.log("TV Planner Card render event:", e), L`
+		return this.debugLog("render event:", e), L`
       <div class="event">
         <div class="event-main">
           <div class="event-title-row">
             ${t ? L`<img class="channel-icon" src=${t} alt="" />` : L``}
 
             <strong class="event-title"
-              >${e.summary || "Unknown Event"}</strong
+              >${e.summary || this.t("unknown_event")}</strong
             >
           </div>
 
@@ -803,7 +803,7 @@ var $ = class extends J {
           ${this.renderDescription(e)}
         </div>
 
-        <button class="copy" @click=${() => this.copyEvent(e)}>Copy</button>
+        <button class="copy" @click=${() => this.copyEvent(e)}>${this.t("copy")}:</button>
       </div>
     `;
 	}
@@ -817,7 +817,7 @@ var $ = class extends J {
         class="description-toggle"
         @click=${() => this.toggleEventDescription(e)}
       >
-        ${i ? "▼ Hide description" : "▶ Show description"}
+        ${i ? this.t("hide_description") : this.t("show_description")}
       </div>
 
       ${i ? L`<div class="description">${e.description}</div>` : L``}
@@ -830,22 +830,27 @@ var $ = class extends J {
 	refreshDashboard() {
 		let e = this._hass;
 		if (!e) {
-			alert("Home Assistant connection not found.");
+			alert(this.t("ha_connection_not_found"));
 			return;
 		}
-		e.callService("browser_mod", "refresh");
+		this.dashboardRefreshTimeout && window.clearTimeout(this.dashboardRefreshTimeout), this.dashboardRefreshTimeout = window.setTimeout(() => {
+			e.callService("browser_mod", "refresh"), this.dashboardRefreshTimeout = void 0;
+		}, 300);
 	}
 	async copyEvent(e) {
 		let t = this.config, n = this._hass;
 		if (!t) {
-			alert("Configuration not found.");
+			alert(this.t("config_not_found"));
 			return;
 		}
 		if (!n) {
-			alert("Home Assistant connection not found.");
+			alert(this.t("ha_connection_not_found"));
 			return;
 		}
-		confirm(`Copy "${e.summary}" to ${t.target_calendar}?`) && (await n.callService("script", t.copy_script, {
+		confirm(this.t("confirm_copy", {
+			event: e.summary,
+			calendar: t.target_calendar
+		})) && (await n.callService("script", t.copy_script, {
 			source_type: t.source_type || "calendar",
 			source_calendar: t.source_calendar || "",
 			source_entity: this.selectedSourceEntity || t.source_entity || "",
@@ -886,7 +891,7 @@ var $ = class extends J {
 			start_date_time: n.toISOString(),
 			end_date_time: r.toISOString()
 		}, { entity_id: e.source_calendar }, !1, !0);
-		console.log("TV Planner Card calendar response:", i);
+		this.debugLog("calendar response:", i);
 		let a = this.extractCalendarEvents(i, e.source_calendar);
 		this.events = a.map((e) => this.normalizeCalendarEvent(e));
 	}
@@ -979,7 +984,7 @@ var $ = class extends J {
 		}
 	}
 	getEventChannel(e) {
-		return e.location ? e.location.trim() : e.summary.includes("|") ? e.summary?.split("|")[0]?.trim() ?? "Unknown Event" : "";
+		return e.location ? e.location.trim() : e.summary.includes("|") ? e.summary?.split("|")[0]?.trim() ?? this.t("unknown_event") : "";
 	}
 	getCombinedChannelIcons() {
 		let e = {};
@@ -1061,6 +1066,12 @@ var $ = class extends J {
 	}
 	asString(e) {
 		return typeof e == "string" ? e : "";
+	}
+	isDebugEnabled() {
+		return this.config?.debug === !0;
+	}
+	debugLog(e, ...t) {
+		this.isDebugEnabled() && console.debug(`TV Planner Card: ${e}`, ...t);
 	}
 	t(e, t = {}) {
 		return ye(this.config?.language, e, t);
