@@ -306,6 +306,10 @@ Examples:
 
 ## Required Home Assistant Script
 
+The card copies events by calling a Home Assistant script.
+
+You can either create this script manually, or use the provided script blueprint.
+
 Example copy script:
 
 ```yaml
@@ -384,6 +388,75 @@ sequence:
       start_date_time: "{{ start_date_time }}"
       end_date_time: "{{ end_date_time }}"
 ```
+
+---
+
+## Script Blueprint Installation
+
+The recommended setup is to create the copy script from the provided blueprint.
+
+### Import blueprint
+
+You can import the script blueprint directly into Home Assistant:
+
+```text
+https://github.com/WebMeesters2/tv-planner-card/blob/main/blueprints/script/webmeesters2/tv_planner_copy_event.yaml
+```
+
+or use this button:
+
+[![Import Blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/WebMeesters2/tv-planner-card/blob/main/blueprints/script/webmeesters2/tv_planner_copy_event.yaml)
+
+Or manually copy the file to:
+
+```text
+/config/blueprints/script/webmeesters2/tv_planner_copy_event.yaml
+```
+
+### Manual blueprint installation
+
+Copy the blueprint file to:
+
+```text
+/config/blueprints/script/webmeesters2/tv_planner_copy_event.yaml
+```
+
+Then reload blueprints or restart Home Assistant.
+
+In Home Assistant:
+
+1. Go to **Settings → Automations & scenes → Blueprints**
+1. Open the **Scripts** tab
+1. Select **TV Planner Card - Copy event to calendar**
+1. Create a new script from the blueprint
+1. Select the target calendar
+1. Save the script
+
+Use the created script entity in the card config:
+
+```yaml
+copy_script: script.calendar_copy_event_to_another_calendar
+target_calendar: calendar.televisie
+```
+
+`target_calendar` is still used by the card for display/confirmation text. The actual calendar used by the script is selected when creating the script from the blueprint.
+
+---
+
+### Runtime fields
+
+The card passes these values to the script at runtime:
+
+| Field | Description |
+| --- | --- |
+| `source_type` | Source type, such as `calendar` or `ha_epg` |
+| `source_calendar` | Source calendar entity, when applicable |
+| `source_entity` | Source HA-EPG entity, when applicable |
+| `summary` | Event/program title |
+| `description` | Event/program description |
+| `location` | Event/program location or channel |
+| `start_date_time` | Event start date/time |
+| `end_date_time` | Event end date/time |
 
 ---
 
