@@ -4,24 +4,11 @@ A custom Lovelace card for Home Assistant that allows browsing TV/EPG program so
 
 The project started as a personal workflow tool for curating TV schedules from multiple EPG sources into a final “watch list” calendar, but is designed to support generic scheduling and planning workflows as well.
 
----
+![HA-EPG source card](screenshots/epg-base.png)
 
-## Background
-
-I use Home Assistant to automatically switch TV channels based on calendar events.
-
-In practice, I use two separate calendars:
-
-- A **staging calendar** containing programs I _might_ want to watch
-- A **live viewing calendar** containing programs I definitely want to watch live
-
-This card was created to simplify the process of browsing TV schedules and copying programs between those calendars.
-
-The project also integrates nicely with the excellent HA-EPG integration, allowing TV schedules to be browsed directly from EPG sources and copied into Home Assistant calendars.
-
-While my personal workflow uses two calendars, there is absolutely no requirement to do so — the card can also be used with a single planning calendar or for completely different scheduling workflows.
-
-The automatic TV switching automation itself will eventually become a separate project.
+> [!IMPORTANT]
+> The card requires the accompanying Home Assistant script blueprint
+> (or compatible custom script) to enable calendar copy functionality.
 
 ---
 
@@ -47,6 +34,30 @@ The automatic TV switching automation itself will eventually become a separate p
 
 ---
 
+## Table of Contents
+
+- [Current Status](#current-status)
+- [Installation](#installation)
+  - [Installation via HACS](#installation-via-hacs)
+  - [Manual installation](#installation-manual)
+- [Script Blueprint Installation](#script-blueprint-installation)
+- [Quick Start Examples](#quick-start-examples)
+- [Configuration](#configuration)
+- [Supported Sources](#supported-sources)
+- [Description Modes](#description-modes)
+- [Time Formatting](#time-formatting)
+- [Channel Icons](#channel-icons)
+- [Localization](#localization)
+- [Screenshots](#screenshots)
+- [Development](#development)
+- [Debugging](#debugging)
+- [Roadmap](#roadmap)
+- [Background](#background)
+- [Disclaimer](#disclaimer)
+- [License](#license)
+
+---
+
 ## Current Status
 
 ⚠️ Active development project
@@ -55,137 +66,135 @@ The card is already fully usable for daily workflows, but configuration options 
 
 ---
 
-## Screenshots
+## Installation
 
-### HA-EPG source browser
+### Installation via HACS
 
-![HA-EPG source browser](screenshots/epg-selector.png)
+1. Open HACS.
+1. Go to the three-dot menu.
+1. Choose **Custom repositories**.
+1. Add this repository URL:
 
-### HA-EPG source card
-
-![HA-EPG source card](screenshots/epg-base.png)
-
-### Intermediate planning calendar
-
-![Intermediate planning calendar](screenshots/intermediate-calendar.png)
-
-### Calendar-to-calendar copy workflow
-
-![Calendar copy workflow](screenshots/calendar-copy.png)
-
-### Final viewing calendar
-
-![Final viewing calendar](screenshots/definite-calendar.png)
-
-### Mobile view
-
-![Mobile view](screenshots/mobile-view.png)
-
----
-
-## Channel Icons
-
-The card supports multiple channel icon lookup methods:
-
-1. Native HA-EPG channel_icon attributes
-2. Explicit channel_icons configuration
-3. External JSON icon databases via channel_icons_url
-
-### Example: explicit icon configuration
-
-```YAML
-type: custom:tv-planner-card
-source_type: calendar
-
-channel_icons:
-  NPO 1: https://images.open-epg.com/8617.png
-  NPO1: https://images.open-epg.com/8617.png
-  SBS6: https://images.open-epg.com/8664.png
+```text
+https://github.com/WebMeesters2/tv-planner-card
 ```
 
-### Example: external JSON icon database
+1. Select category **Dashboard**.
+1. Install **TV Planner Card**.
+1. Restart Home Assistant or reload frontend resources if needed.
 
-```YAML
-type: custom:tv-planner-card
-channel_icons_url: /local/channel-icons.json
+The dashboard resource should be added as:
+
+```text
+/hacsfiles/tv-planner-card/tv-planner-card.js
 ```
 
-### Example JSON
+Resource type:
 
-```JSON
-{
-  "NPO 1": "https://images.open-epg.com/8617.png",
-  "NPO1": "https://images.open-epg.com/8617.png",
-  "SBS6": "https://images.open-epg.com/8664.png"
-}
-```
-
-The card automatically generates and matches normalized aliases such as:
-
-- NPO 1 ↔ NPO1
-- SBS6 ↔ SBS 6
-- BBC NL ↔ BBCNL
-
----
-
-## Description Modes
-
-The card supports configurable description visibility.
-
-### Always visible (default)
-
-```YAML
-description_mode: visible
-```
-
-### Completely hidden
-
-```YAML
-description_mode: hidden
-```
-
-### Expand/collapse descriptions (collapsed by default)
-
-```YAML
-description_mode: toggle-off
-```
-
-### Expand/collapse descriptions (expanded by default)
-
-```YAML
-description_mode: toggle-on
+```text
+JavaScript module
 ```
 
 ---
 
-## Supported Sources
+### Installation (manual)
 
-### Calendar sources
+1. Copy `tv-planner-card.js` to:
 
-- Home Assistant calendar entities
+```text
+/config/www/
+```
 
-### EPG sources
+1. Add as a dashboard resource:
 
-- HA-EPG entities
-- Open-EPG based schedules
+```yaml
+url: /local/tv-planner-card.js
+type: module
+```
 
----
-
-## Planned Features
-
-- Visual card editor
-- HACS support
-- XMLTV support
-- Additional EPG providers
-- Search and filtering
-- Duplicate detection
-- Bulk copy operations
-- Drag/drop planning
-- Responsive/mobile layouts
+1. Restart the Home Assistant frontend, or hard-refresh the browser.
 
 ---
 
-## Example: Calendar → Calendar
+## Script Blueprint Installation
+
+The recommended setup is to create the copy script from the included blueprint.
+
+### Import blueprint
+
+You can import the script blueprint directly into Home Assistant:
+
+```text
+https://github.com/WebMeesters2/tv-planner-card/blob/main/blueprints/script/webmeesters2/tv_planner_copy_event.yaml
+```
+
+or use this button:
+
+[![Import Blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/WebMeesters2/tv-planner-card/blob/main/blueprints/script/webmeesters2/tv_planner_copy_event.yaml)
+
+---
+
+### Manual blueprint installation
+
+Copy the blueprint file to:
+
+```text
+/config/blueprints/script/webmeesters2/tv_planner_copy_event.yaml
+```
+
+Then reload blueprints or restart Home Assistant.
+
+In Home Assistant:
+
+1. Go to **Settings → Automations & scenes → Blueprints**
+2. Open the **Scripts** tab
+3. Select **TV Planner Card - Copy event to calendar**
+4. Create a new script from the blueprint
+5. Select the target calendar
+6. Save the script
+
+Use the created script entity in the card configuration:
+
+```yaml
+copy_script: script.calendar_copy_event_to_another_calendar
+target_calendar: calendar.televisie
+```
+
+`target_calendar` is still used by the card for display and confirmation text.  
+The actual calendar used by the script is selected when creating the script from the blueprint.
+
+---
+
+### Alternative: manual copy script
+
+If you prefer not to use the blueprint, a compatible example script is available separately:
+
+```text
+examples/calendar_copy_event_script.yaml
+```
+
+---
+
+### Runtime fields
+
+The card passes these values to the script at runtime:
+
+| Field | Description |
+| --- | --- |
+| `source_type` | Source type, such as `calendar` or `ha_epg` |
+| `source_calendar` | Source calendar entity, when applicable |
+| `source_entity` | Source HA-EPG entity, when applicable |
+| `summary` | Event/program title |
+| `description` | Event/program description |
+| `location` | Event/program location or channel |
+| `start_date_time` | Event start date/time |
+| `end_date_time` | Event end date/time |
+
+---
+
+## Quick Start Examples
+
+### Calendar → Calendar
 
 ```yaml
 type: custom:tv-planner-card
@@ -199,7 +208,7 @@ days_to_show: 14
 
 ---
 
-## Example: HA-EPG → Calendar
+### HA-EPG → Calendar
 
 ```yaml
 type: custom:tv-planner-card
@@ -244,19 +253,51 @@ sources:
 
 ---
 
-## Localization
+## Supported Sources
 
-The card supports UI translations.
+### Calendar sources
 
-Currently supported languages:
+- Home Assistant calendar entities
 
-- `en`
-- `nl`
+### EPG sources
 
-Example:
+- HA-EPG entities
+- Open-EPG based schedules
+
+---
+
+## Description Modes
+
+The card supports configurable description visibility.
+
+### Always visible (default)
 
 ```yaml
-language: nl
+description_mode: visible
+```
+
+---
+
+### Completely hidden
+
+```yaml
+description_mode: hidden
+```
+
+---
+
+### Expand/collapse descriptions (collapsed by default)
+
+```yaml
+description_mode: toggle-off
+```
+
+---
+
+### Expand/collapse descriptions (expanded by default)
+
+```yaml
+description_mode: toggle-on
 ```
 
 ---
@@ -277,6 +318,8 @@ Example:
 Mon 11-05 23:45 → 00:35
 ```
 
+---
+
 ### Full mode
 
 ```yaml
@@ -288,6 +331,8 @@ Example:
 ```text
 Mon 11-05 23:45 → Tue 12-05 00:35
 ```
+
+---
 
 ### Locale configuration
 
@@ -304,178 +349,103 @@ Examples:
 
 ---
 
-## Required Home Assistant Script
+## Channel Icons
 
-The card copies events by calling a Home Assistant script.
+The card supports multiple channel icon lookup methods:
 
-You can either create this script manually, or use the provided script blueprint.
+1. Native HA-EPG `channel_icon` attributes
+2. Explicit `channel_icons` configuration
+3. External JSON icon databases via `channel_icons_url`
 
-Example copy script:
+---
+
+### Example: explicit icon configuration
 
 ```yaml
-alias: Calendar - Copy event to another calendar
-mode: single
+type: custom:tv-planner-card
+source_type: calendar
 
-fields:
-  source_type:
-    name: Source type
-    required: false
-    selector:
-      text:
-
-  source_calendar:
-    name: Source calendar
-    required: false
-    selector:
-      text:
-
-  source_entity:
-    name: Source entity
-    required: false
-    selector:
-      text:
-
-  target_calendar:
-    name: Target calendar
-    required: true
-    selector:
-      text:
-
-  summary:
-    name: Summary
-    required: true
-    selector:
-      text:
-
-  description:
-    name: Description
-    required: false
-    selector:
-      text:
-
-  location:
-    name: Location
-    required: false
-    selector:
-      text:
-
-  start_date_time:
-    name: Start date/time
-    required: true
-    selector:
-      text:
-
-  end_date_time:
-    name: End date/time
-    required: true
-    selector:
-      text:
-
-sequence:
-  - action: calendar.create_event
-    target:
-      entity_id: "{{ target_calendar }}"
-    data:
-      summary: "{{ summary }}"
-      description: >-
-        {{ description | default('') }}
-
-        Copied from:
-        source_type={{ source_type | default('') }}
-        source_calendar={{ source_calendar | default('') }}
-        source_entity={{ source_entity | default('') }}
-      location: "{{ location | default('') }}"
-      start_date_time: "{{ start_date_time }}"
-      end_date_time: "{{ end_date_time }}"
+channel_icons:
+  NPO 1: https://images.open-epg.com/8617.png
+  NPO1: https://images.open-epg.com/8617.png
+  SBS6: https://images.open-epg.com/8664.png
 ```
 
 ---
 
-## Script Blueprint Installation
-
-The recommended setup is to create the copy script from the provided blueprint.
-
-### Import blueprint
-
-You can import the script blueprint directly into Home Assistant:
-
-```text
-https://github.com/WebMeesters2/tv-planner-card/blob/main/blueprints/script/webmeesters2/tv_planner_copy_event.yaml
-```
-
-or use this button:
-
-[![Import Blueprint](https://my.home-assistant.io/badges/blueprint_import.svg)](https://my.home-assistant.io/redirect/blueprint_import/?blueprint_url=https://github.com/WebMeesters2/tv-planner-card/blob/main/blueprints/script/webmeesters2/tv_planner_copy_event.yaml)
-
-Or manually copy the file to:
-
-```text
-/config/blueprints/script/webmeesters2/tv_planner_copy_event.yaml
-```
-
-### Manual blueprint installation
-
-Copy the blueprint file to:
-
-```text
-/config/blueprints/script/webmeesters2/tv_planner_copy_event.yaml
-```
-
-Then reload blueprints or restart Home Assistant.
-
-In Home Assistant:
-
-1. Go to **Settings → Automations & scenes → Blueprints**
-1. Open the **Scripts** tab
-1. Select **TV Planner Card - Copy event to calendar**
-1. Create a new script from the blueprint
-1. Select the target calendar
-1. Save the script
-
-Use the created script entity in the card config:
+### Example: external JSON icon database
 
 ```yaml
-copy_script: script.calendar_copy_event_to_another_calendar
-target_calendar: calendar.televisie
+type: custom:tv-planner-card
+channel_icons_url: /local/channel-icons.json
 ```
-
-`target_calendar` is still used by the card for display/confirmation text. The actual calendar used by the script is selected when creating the script from the blueprint.
 
 ---
 
-### Runtime fields
+### Example JSON
 
-The card passes these values to the script at runtime:
+```json
+{
+  "NPO 1": "https://images.open-epg.com/8617.png",
+  "NPO1": "https://images.open-epg.com/8617.png",
+  "SBS6": "https://images.open-epg.com/8664.png"
+}
+```
 
-| Field | Description |
-| --- | --- |
-| `source_type` | Source type, such as `calendar` or `ha_epg` |
-| `source_calendar` | Source calendar entity, when applicable |
-| `source_entity` | Source HA-EPG entity, when applicable |
-| `summary` | Event/program title |
-| `description` | Event/program description |
-| `location` | Event/program location or channel |
-| `start_date_time` | Event start date/time |
-| `end_date_time` | Event end date/time |
+The card automatically generates and matches normalized aliases such as:
+
+- NPO 1 ↔ NPO1
+- SBS6 ↔ SBS 6
+- BBC NL ↔ BBCNL
 
 ---
 
-## Installation (manual)
+## Localization
 
-1. Copy `tv-planner-card.js` to:
+The card supports UI translations.
 
-```text
-/config/www/
-```
+Currently supported languages:
 
-1. Add as a dashboard resource:
+- `en`
+- `nl`
+
+Example:
 
 ```yaml
-url: /local/tv-planner-card.js
-type: module
+language: nl
 ```
 
-1. Restart the Home Assistant frontend, or hard-refresh the browser.
+---
+
+## Screenshots
+
+### HA-EPG source browser
+
+![HA-EPG source browser](screenshots/epg-selector.png)
+
+---
+
+### Intermediate planning calendar
+
+![Intermediate planning calendar](screenshots/intermediate-calendar.png)
+
+---
+
+### Calendar-to-calendar copy workflow
+
+![Calendar copy workflow](screenshots/calendar-copy.png)
+
+---
+
+### Final viewing calendar
+
+![Final viewing calendar](screenshots/definite-calendar.png)
+
+---
+
+### Mobile view
+
+![Mobile view](screenshots/mobile-view.png)
 
 ---
 
@@ -487,16 +457,39 @@ Project stack:
 - Lit
 - Vite
 
-Build:
+---
 
-```Bash
+### Build
+
+```bash
 npm install
 npm run build
 ```
 
 The generated frontend bundle is:
 
-`dist/tv-planner-card.js`
+```text
+dist/tv-planner-card.js
+```
+
+---
+
+### Project structure
+
+```text
+src/
+  tv-planner-card.ts
+  localize.ts
+
+blueprints/
+  script/
+    webmeesters2/
+      tv_planner_copy_event.yaml
+
+dist/
+```
+
+---
 
 ## Debugging
 
@@ -512,6 +505,38 @@ This enables additional console logging for:
 - calendar responses
 - icon resolution
 - internal parsing
+
+---
+
+## Roadmap
+
+Planned features and improvements:
+
+- Visual card editor
+- XMLTV support
+- Additional EPG providers
+- Search and filtering
+- Persistent duplicate detection
+- Bulk copy operations
+- Drag/drop planning
+- Additional responsive/mobile optimizations
+- Automatic refresh intervals
+- Channel color accents
+
+---
+
+## Background
+
+I use Home Assistant to automatically switch TV channels based on calendar events.
+
+In practice, I use two separate calendars:
+
+- A staging calendar containing programs I might want to watch
+- A live viewing calendar containing programs I definitely want to watch live
+
+This card was created to simplify the process of browsing TV schedules and copying programs between those calendars.
+
+The automatic TV switching automation itself will eventually become a separate project.
 
 ---
 

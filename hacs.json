@@ -1,5 +1,6 @@
 {
   "name": "TV Planner Card",
   "render_readme": true,
-  "filename": "tv-planner-card.js"
+  "filename": "tv-planner-card.js",
+  "homeassistant": "2026.4.0"
 }
