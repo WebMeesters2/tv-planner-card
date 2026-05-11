@@ -40,7 +40,10 @@ The automatic TV switching automation itself will eventually become a separate p
 - Lightweight frontend-only architecture
 - Mobile-friendly layout
 - Non-destructive copy workflow
-- Internationalisation (English-Dutch now)
+- Localization support
+- Configurable time/date formatting
+- Session-based copied-event tracking
+- Configurable debug logging
 
 ---
 
@@ -234,6 +237,70 @@ sources:
 | `channel_icons`     | object                 | Inline channel icon mappings                   |
 | `channel_icons_url` | string                 | External JSON icon database                    |
 | `description_mode`  | string                 | `hidden`, `visible`, `toggle-on`, `toggle-off` |
+| `language`          | string                 | UI language (`en`, `nl`)                       |
+| `debug`             | boolean                | Enable debug logging                           |
+| `time_display_mode` | string                 | `compact` or `full`                            |
+| `time_locale`       | string                 | Locale for date/time formatting                |
+
+---
+
+## Localization
+
+The card supports UI translations.
+
+Currently supported languages:
+
+- `en`
+- `nl`
+
+Example:
+
+```yaml
+language: nl
+```
+
+---
+
+## Time Formatting
+
+The card supports compact and full time display modes.
+
+### Compact mode (default)
+
+```yaml
+time_display_mode: compact
+```
+
+Example:
+
+```text
+Mon 11-05 23:45 → 00:35
+```
+
+### Full mode
+
+```yaml
+time_display_mode: full
+```
+
+Example:
+
+```text
+Mon 11-05 23:45 → Tue 12-05 00:35
+```
+
+### Locale configuration
+
+```yaml
+time_locale: nl-NL
+```
+
+Examples:
+
+- `nl-NL`
+- `en-GB`
+- `en-US`
+- `de-DE`
 
 ---
 
@@ -357,6 +424,21 @@ npm run build
 The generated frontend bundle is:
 
 `dist/tv-planner-card.js`
+
+## Debugging
+
+Enable debug logging:
+
+```yaml
+debug: true
+```
+
+This enables additional console logging for:
+
+- event rendering
+- calendar responses
+- icon resolution
+- internal parsing
 
 ---
 

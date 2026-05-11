@@ -608,7 +608,7 @@ function Q(e, t, n, r) {
 //#region src/tv-planner-card.ts
 var $ = class extends J {
 	constructor(...e) {
-		super(...e), this.cachedAliasMap = {}, this.events = [], this.loading = !1, this.selectedSourceEntity = "", this.lastCopied = "", this.loaded = !1, this.errorMessage = "", this.externalChannelIcons = {}, this.expandedEvents = {}, this.descriptionsExpanded = !1;
+		super(...e), this.cachedAliasMap = {}, this.events = [], this.loading = !1, this.selectedSourceEntity = "", this.lastCopied = "", this.loaded = !1, this.errorMessage = "", this.externalChannelIcons = {}, this.expandedEvents = {}, this.descriptionsExpanded = !1, this.copiedEventKeys = /* @__PURE__ */ new Set();
 	}
 	static {
 		this.styles = o`
@@ -629,11 +629,31 @@ var $ = class extends J {
       justify-content: space-between;
       gap: 12px;
       padding: 10px 0;
-      border-top: 1px solid var(--divider-color);
     }
 
     .event-main {
       min-width: 0;
+      flex: 1 1 auto;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--divider-color);
+    }
+
+    .copy {
+      align-self: center;
+      white-space: nowrap;
+    }
+
+    .copy[disabled] {
+      cursor: default;
+      opacity: 0.6;
+    }
+
+    .event.copied {
+      opacity: 0.75;
+    }
+
+    .event.copied .event-title {
+      text-decoration: line-through;
     }
 
     .time,
@@ -643,16 +663,15 @@ var $ = class extends J {
       margin-top: 3px;
     }
 
-    .copy {
-      align-self: center;
-      white-space: nowrap;
+    .event-time {
+      color: var(--accent-color);
+      font-weight: 700;
     }
 
     .day-separator {
       margin-top: 14px;
-      padding: 6px 0;
+      padding: 10px 0 6px 0;
       font-weight: 700;
-      border-top: 1px solid var(--divider-color);
       color: var(--accent-color);
       font-size: 1.05em;
       text-transform: uppercase;
@@ -796,7 +815,7 @@ var $ = class extends J {
       `);
 	}
 	renderEvent(e) {
-		let t = this.getEventIcon(e);
+		let t = this.getEventIcon(e), n = this.isEventCopied(e);
 		return this.debugLog("render event:", e), L`
       <div class="event">
         <div class="event-main">
@@ -809,15 +828,21 @@ var $ = class extends J {
           </div>
 
           <div class="time">
-            ${this.formatDate(e.start)} → ${this.formatDate(e.end)}
+            ${this.formatEventTimeRange(e)} 
           </div>
 
           ${this.renderDescription(e)}
         </div>
 
-        <button class="copy" @click=${() => this.copyEvent(e)}>
-          ${this.t("copy")}
-        </button>
+        <div class="event ${n ? "copied" : ""}">
+          <button
+            class="copy"
+            ?disabled=${n}
+            @click=${() => this.copyEvent(e)}
+          >
+            ${n ? "✓" : this.t("copy")}
+          </button>
+        </div>
       </div>
     `;
 	}
@@ -849,7 +874,8 @@ var $ = class extends J {
 			alert(this.t("ha_connection_not_found"));
 			return;
 		}
-		confirm(this.t("confirm_copy", {
+		let r = this.getEventKey(e);
+		this.copiedEventKeys = new Set([...this.copiedEventKeys, r]), confirm(this.t("confirm_copy", {
 			summary: e.summary,
 			target_calendar: t.target_calendar
 		})) && (await n.callService("script", t.copy_script, {
@@ -1032,14 +1058,38 @@ var $ = class extends J {
 			return e[n] || (e[n] = []), e[n].push(t), e;
 		}, {});
 	}
-	formatDate(e) {
-		return e ? new Date(e).toLocaleString(void 0, {
+	formatEventTimeRange(e) {
+		if ((this.config?.time_display_mode || "compact") === "full") return L`
+        ${this.formatDatePart(e.start)}
+        <strong class="event-time">${this.formatTimePart(e.start)}</strong>
+        →
+        ${this.formatDatePart(e.end)}
+        <strong class="event-time">${this.formatTimePart(e.end)}</strong>
+      `;
+		let t = new Date(e.start), n = new Date(e.end), r = t.toDateString() === n.toDateString();
+		return L`
+      ${this.formatDatePart(e.start)}
+      <strong class="event-time">${this.formatTimePart(e.start)}</strong>
+      →
+      ${r ? L`` : L`${this.formatDatePart(e.end)}`}
+      <strong class="event-time">${this.formatTimePart(e.end)}</strong>
+    `;
+	}
+	formatDatePart(e) {
+		return e ? `${new Date(e).toLocaleDateString(this.getTimeLocale(), {
 			weekday: "short",
 			day: "2-digit",
-			month: "2-digit",
+			month: "2-digit"
+		})} ` : "";
+	}
+	formatTimePart(e) {
+		return e ? new Date(e).toLocaleTimeString(this.getTimeLocale(), {
 			hour: "2-digit",
 			minute: "2-digit"
 		}) : "";
+	}
+	getTimeLocale() {
+		return this.config?.time_locale || void 0;
 	}
 	formatDay(e) {
 		return new Date(e).toLocaleDateString(void 0, {
@@ -1087,11 +1137,14 @@ var $ = class extends J {
 	toggleAllDescriptions() {
 		this.descriptionsExpanded = !this.descriptionsExpanded;
 	}
+	isEventCopied(e) {
+		return this.copiedEventKeys.has(this.getEventKey(e));
+	}
 	t(e, t = {}) {
 		return ye(this.config?.language, e, t);
 	}
 };
-Q([Y({ attribute: !1 })], $.prototype, "config", void 0), Q([X()], $.prototype, "events", void 0), Q([X()], $.prototype, "loading", void 0), Q([X()], $.prototype, "selectedSourceEntity", void 0), Q([X()], $.prototype, "lastCopied", void 0), Q([X()], $.prototype, "loaded", void 0), Q([X()], $.prototype, "errorMessage", void 0), Q([X()], $.prototype, "externalChannelIcons", void 0), Q([X()], $.prototype, "expandedEvents", void 0), Q([X()], $.prototype, "descriptionsExpanded", void 0), customElements.define("tv-planner-card", $);
+Q([Y({ attribute: !1 })], $.prototype, "config", void 0), Q([X()], $.prototype, "events", void 0), Q([X()], $.prototype, "loading", void 0), Q([X()], $.prototype, "selectedSourceEntity", void 0), Q([X()], $.prototype, "lastCopied", void 0), Q([X()], $.prototype, "loaded", void 0), Q([X()], $.prototype, "errorMessage", void 0), Q([X()], $.prototype, "externalChannelIcons", void 0), Q([X()], $.prototype, "expandedEvents", void 0), Q([X()], $.prototype, "descriptionsExpanded", void 0), Q([X()], $.prototype, "copiedEventKeys", void 0), customElements.define("tv-planner-card", $);
 //#endregion
 
 //# sourceMappingURL=tv-planner-card.js.map

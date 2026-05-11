@@ -27,6 +27,8 @@ interface TvPlannerCardConfig {
   description_mode?: "hidden" | "visible" | "toggle-on" | "toggle-off";
   language?: "en" | "nl";
   debug?: boolean;
+  time_display_mode?: "compact" | "full";
+  time_locale?: string;
 }
 
 interface TvPlannerSource {
@@ -99,6 +101,7 @@ class TvPlannerCard extends LitElement {
   @state() private externalChannelIcons: Record<string, string> = {};
   @state() private expandedEvents: Record<string, boolean> = {};
   @state() private descriptionsExpanded = false;
+  @state() private copiedEventKeys = new Set<string>();
 
   /* ------------------------------------------------------------------------ */
   /* Styles                                                                   */
@@ -122,11 +125,31 @@ class TvPlannerCard extends LitElement {
       justify-content: space-between;
       gap: 12px;
       padding: 10px 0;
-      border-top: 1px solid var(--divider-color);
     }
 
     .event-main {
       min-width: 0;
+      flex: 1 1 auto;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--divider-color);
+    }
+
+    .copy {
+      align-self: center;
+      white-space: nowrap;
+    }
+
+    .copy[disabled] {
+      cursor: default;
+      opacity: 0.6;
+    }
+
+    .event.copied {
+      opacity: 0.75;
+    }
+
+    .event.copied .event-title {
+      text-decoration: line-through;
     }
 
     .time,
@@ -136,16 +159,15 @@ class TvPlannerCard extends LitElement {
       margin-top: 3px;
     }
 
-    .copy {
-      align-self: center;
-      white-space: nowrap;
+    .event-time {
+      color: var(--accent-color);
+      font-weight: 700;
     }
 
     .day-separator {
       margin-top: 14px;
-      padding: 6px 0;
+      padding: 10px 0 6px 0;
       font-weight: 700;
-      border-top: 1px solid var(--divider-color);
       color: var(--accent-color);
       font-size: 1.05em;
       text-transform: uppercase;
@@ -352,9 +374,11 @@ class TvPlannerCard extends LitElement {
 
   private renderEvent(event: TvPlannerEvent) {
     const icon = this.getEventIcon(event);
+    const copied = this.isEventCopied(event);
+
     // DEBUG code to log event data for troubleshooting
-    // REMOVE LATER!
     this.debugLog("render event:", event);
+
     return html`
       <div class="event">
         <div class="event-main">
@@ -369,15 +393,21 @@ class TvPlannerCard extends LitElement {
           </div>
 
           <div class="time">
-            ${this.formatDate(event.start)} → ${this.formatDate(event.end)}
+            ${this.formatEventTimeRange(event)} 
           </div>
 
           ${this.renderDescription(event)}
         </div>
 
-        <button class="copy" @click=${() => this.copyEvent(event)}>
-          ${this.t("copy")}
-        </button>
+        <div class="event ${copied ? "copied" : ""}">
+          <button
+            class="copy"
+            ?disabled=${copied}
+            @click=${() => this.copyEvent(event)}
+          >
+            ${copied ? "✓" : this.t("copy")}
+          </button>
+        </div>
       </div>
     `;
   }
@@ -439,6 +469,10 @@ class TvPlannerCard extends LitElement {
       alert(this.t("ha_connection_not_found"));
       return;
     }
+
+    const key = this.getEventKey(event);
+
+    this.copiedEventKeys = new Set([...this.copiedEventKeys, key]);
 
     const ok = confirm(
       this.t("confirm_copy", {
@@ -883,16 +917,53 @@ class TvPlannerCard extends LitElement {
     );
   }
 
-  private formatDate(value: string) {
+  private formatEventTimeRange(event: TvPlannerEvent) {
+    const mode = this.config?.time_display_mode || "compact";
+
+    if (mode === "full") {
+      return html`
+        ${this.formatDatePart(event.start)}
+        <strong class="event-time">${this.formatTimePart(event.start)}</strong>
+        →
+        ${this.formatDatePart(event.end)}
+        <strong class="event-time">${this.formatTimePart(event.end)}</strong>
+      `;
+    }
+
+    const startDate = new Date(event.start);
+    const endDate = new Date(event.end);
+    const sameDay = startDate.toDateString() === endDate.toDateString();
+
+    return html`
+      ${this.formatDatePart(event.start)}
+      <strong class="event-time">${this.formatTimePart(event.start)}</strong>
+      →
+      ${sameDay ? html`` : html`${this.formatDatePart(event.end)}`}
+      <strong class="event-time">${this.formatTimePart(event.end)}</strong>
+    `;
+  }
+
+  private formatDatePart(value: string): string {
     if (!value) return "";
 
-    return new Date(value).toLocaleString(undefined, {
+    return `${new Date(value).toLocaleDateString(this.getTimeLocale(), {
       weekday: "short",
       day: "2-digit",
       month: "2-digit",
+    })} `;
+  }
+
+  private formatTimePart(value: string): string {
+    if (!value) return "";
+
+    return new Date(value).toLocaleTimeString(this.getTimeLocale(), {
       hour: "2-digit",
       minute: "2-digit",
     });
+  }
+
+  private getTimeLocale(): string | undefined {
+    return this.config?.time_locale || undefined;
   }
 
   private formatDay(value: string) {
@@ -968,6 +1039,10 @@ class TvPlannerCard extends LitElement {
 
   private toggleAllDescriptions() {
     this.descriptionsExpanded = !this.descriptionsExpanded;
+  }
+
+  private isEventCopied(event: TvPlannerEvent): boolean {
+    return this.copiedEventKeys.has(this.getEventKey(event));
   }
 
   /* ------------------------------------------------------------------------ */
