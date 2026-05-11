@@ -83,10 +83,12 @@ interface HaEpgProgramLike {
 
 class TvPlannerCard extends LitElement {
   @property({ attribute: false })
-
   public config?: TvPlannerCardConfig;
   private _hass?: HassLike;
   private dashboardRefreshTimeout?: number | undefined;
+
+  private cachedCombinedChannelIcons?: Record<string, string> | undefined;
+  private cachedAliasMap: Record<string, string[]> = {};
 
   @state() private events: TvPlannerEvent[] = [];
   @state() private loading = false;
@@ -215,6 +217,8 @@ class TvPlannerCard extends LitElement {
   /* ------------------------------------------------------------------------ */
 
   setConfig(config: TvPlannerCardConfig) {
+    this.invalidateIconCache();
+
     this.config = config;
     this.events = [];
     this.loading = false;
@@ -227,6 +231,7 @@ class TvPlannerCard extends LitElement {
 
   set hass(hass: HassLike) {
     this._hass = hass;
+    this.invalidateIconCache();
 
     if (!this.loaded) {
       this.loaded = true;
@@ -265,7 +270,9 @@ class TvPlannerCard extends LitElement {
           </button>
 
           ${this.lastCopied
-            ? html`<p class="success">${this.t("copied")}: ${this.lastCopied}</p>`
+            ? html`<p class="success">
+                ${this.t("copied")}: ${this.lastCopied}
+              </p>`
             : html``}
           ${this.renderSourceSelector()} ${this.renderBody()}
         </div>
@@ -279,7 +286,9 @@ class TvPlannerCard extends LitElement {
     }
 
     if (this.errorMessage) {
-      return html`<p class="error">${this.t("error")}: ${this.errorMessage}</p>`;
+      return html`<p class="error">
+        ${this.t("error")}: ${this.errorMessage}
+      </p>`;
     }
 
     if (this.events.length === 0) {
@@ -352,7 +361,9 @@ class TvPlannerCard extends LitElement {
           ${this.renderDescription(event)}
         </div>
 
-        <button class="copy" @click=${() => this.copyEvent(event)}>${this.t("copy")}:</button>
+        <button class="copy" @click=${() => this.copyEvent(event)}>
+          ${this.t("copy")}
+        </button>
       </div>
     `;
   }
@@ -428,7 +439,12 @@ class TvPlannerCard extends LitElement {
       return;
     }
 
-    const ok = confirm(this.t("confirm_copy", { event: event.summary, calendar: config.target_calendar }));
+    const ok = confirm(
+      this.t("confirm_copy", {
+        event: event.summary,
+        calendar: config.target_calendar,
+      }),
+    );
     if (!ok) return;
 
     await hass.callService("script", config.copy_script, {
@@ -716,9 +732,11 @@ class TvPlannerCard extends LitElement {
       });
 
       this.externalChannelIcons = expanded;
+      this.invalidateIconCache();
     } catch (err) {
       console.error("TV Planner Card: failed to load channel icons", err);
       this.externalChannelIcons = {};
+      this.invalidateIconCache();
     }
   }
 
@@ -759,12 +777,17 @@ class TvPlannerCard extends LitElement {
   }
 
   private getCombinedChannelIcons(): Record<string, string> {
+    if (this.cachedCombinedChannelIcons) {
+      return this.cachedCombinedChannelIcons;
+    }
+
     const icons: Record<string, string> = {};
 
     this.addChannelIcons(icons, this.externalChannelIcons);
     this.addChannelIcons(icons, this.config?.channel_icons);
     this.addChannelIcons(icons, this.getChannelIconMap());
 
+    this.cachedCombinedChannelIcons = icons;
     return icons;
   }
 
@@ -810,18 +833,32 @@ class TvPlannerCard extends LitElement {
   }
 
   private getChannelAliases(channel: string): string[] {
+    const cacheKey = channel.trim();
+
+    if (this.cachedAliasMap[cacheKey]) {
+      return this.cachedAliasMap[cacheKey];
+    }
+
     const original = channel.trim();
     const normalized = this.normalizeChannelName(original);
     const compact = normalized.replace(/\s+/g, "");
     const spacedNumber = normalized.replace(/^([A-Z]+)([0-9]+)$/u, "$1 $2");
 
-    return [...new Set([original, normalized, compact, spacedNumber])].filter(
-      Boolean,
-    );
+    const aliases = [
+      ...new Set([original, normalized, compact, spacedNumber]),
+    ].filter(Boolean);
+
+    this.cachedAliasMap[cacheKey] = aliases;
+    return aliases;
   }
 
   private normalizeChannelName(channel: string): string {
     return channel.replace(/\s+/g, " ").trim().toUpperCase();
+  }
+
+  private invalidateIconCache() {
+    this.cachedCombinedChannelIcons = undefined;
+    this.cachedAliasMap = {};
   }
 
   /* ------------------------------------------------------------------------ */

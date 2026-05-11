@@ -608,7 +608,7 @@ function Q(e, t, n, r) {
 //#region src/tv-planner-card.ts
 var $ = class extends J {
 	constructor(...e) {
-		super(...e), this.events = [], this.loading = !1, this.selectedSourceEntity = "", this.lastCopied = "", this.loaded = !1, this.errorMessage = "", this.externalChannelIcons = {}, this.expandedEvents = {};
+		super(...e), this.cachedAliasMap = {}, this.events = [], this.loading = !1, this.selectedSourceEntity = "", this.lastCopied = "", this.loaded = !1, this.errorMessage = "", this.externalChannelIcons = {}, this.expandedEvents = {};
 	}
 	static {
 		this.styles = o`
@@ -721,10 +721,10 @@ var $ = class extends J {
   `;
 	}
 	setConfig(e) {
-		this.config = e, this.events = [], this.loading = !1, this.errorMessage = "", this.selectedSourceEntity = e.source_entity || e.sources?.[0]?.entity || "", this.loadExternalChannelIcons();
+		this.invalidateIconCache(), this.config = e, this.events = [], this.loading = !1, this.errorMessage = "", this.selectedSourceEntity = e.source_entity || e.sources?.[0]?.entity || "", this.loadExternalChannelIcons();
 	}
 	set hass(e) {
-		this._hass = e, this.loaded || (this.loaded = !0, this.loadEvents());
+		this._hass = e, this.invalidateIconCache(), this.loaded || (this.loaded = !0, this.loadEvents());
 	}
 	getCardSize() {
 		return 4;
@@ -747,14 +747,18 @@ var $ = class extends J {
             ${this.t("refresh_dashboard")}
           </button>
 
-          ${this.lastCopied ? L`<p class="success">${this.t("copied")}: ${this.lastCopied}</p>` : L``}
+          ${this.lastCopied ? L`<p class="success">
+                ${this.t("copied")}: ${this.lastCopied}
+              </p>` : L``}
           ${this.renderSourceSelector()} ${this.renderBody()}
         </div>
       </ha-card>
     `;
 	}
 	renderBody() {
-		return this.loading ? L`<p>${this.t("loading_events")}</p>` : this.errorMessage ? L`<p class="error">${this.t("error")}: ${this.errorMessage}</p>` : this.events.length === 0 ? L`<p>${this.t("no_events_found")}</p>` : this.renderEventGroups();
+		return this.loading ? L`<p>${this.t("loading_events")}</p>` : this.errorMessage ? L`<p class="error">
+        ${this.t("error")}: ${this.errorMessage}
+      </p>` : this.events.length === 0 ? L`<p>${this.t("no_events_found")}</p>` : this.renderEventGroups();
 	}
 	renderSourceSelector() {
 		let e = this.config?.sources;
@@ -803,7 +807,9 @@ var $ = class extends J {
           ${this.renderDescription(e)}
         </div>
 
-        <button class="copy" @click=${() => this.copyEvent(e)}>${this.t("copy")}:</button>
+        <button class="copy" @click=${() => this.copyEvent(e)}>
+          ${this.t("copy")}
+        </button>
       </div>
     `;
 	}
@@ -966,9 +972,9 @@ var $ = class extends J {
 			let r = {};
 			Object.entries(n).forEach(([e, t]) => {
 				if (typeof t == "string") for (let n of this.getChannelAliases(e)) r[n] = t;
-			}), this.externalChannelIcons = r;
+			}), this.externalChannelIcons = r, this.invalidateIconCache();
 		} catch (e) {
-			console.error("TV Planner Card: failed to load channel icons", e), this.externalChannelIcons = {};
+			console.error("TV Planner Card: failed to load channel icons", e), this.externalChannelIcons = {}, this.invalidateIconCache();
 		}
 	}
 	getEventIcon(e) {
@@ -987,8 +993,9 @@ var $ = class extends J {
 		return e.location ? e.location.trim() : e.summary.includes("|") ? e.summary?.split("|")[0]?.trim() ?? this.t("unknown_event") : "";
 	}
 	getCombinedChannelIcons() {
+		if (this.cachedCombinedChannelIcons) return this.cachedCombinedChannelIcons;
 		let e = {};
-		return this.addChannelIcons(e, this.externalChannelIcons), this.addChannelIcons(e, this.config?.channel_icons), this.addChannelIcons(e, this.getChannelIconMap()), e;
+		return this.addChannelIcons(e, this.externalChannelIcons), this.addChannelIcons(e, this.config?.channel_icons), this.addChannelIcons(e, this.getChannelIconMap()), this.cachedCombinedChannelIcons = e, e;
 	}
 	getChannelIconMap() {
 		let e = this._hass, t = this.config?.sources || [], n = {};
@@ -1007,16 +1014,21 @@ var $ = class extends J {
 		});
 	}
 	getChannelAliases(e) {
-		let t = e.trim(), n = this.normalizeChannelName(t), r = n.replace(/\s+/g, ""), i = n.replace(/^([A-Z]+)([0-9]+)$/u, "$1 $2");
-		return [...new Set([
-			t,
+		let t = e.trim();
+		if (this.cachedAliasMap[t]) return this.cachedAliasMap[t];
+		let n = e.trim(), r = this.normalizeChannelName(n), i = r.replace(/\s+/g, ""), a = r.replace(/^([A-Z]+)([0-9]+)$/u, "$1 $2"), o = [...new Set([
 			n,
 			r,
-			i
+			i,
+			a
 		])].filter(Boolean);
+		return this.cachedAliasMap[t] = o, o;
 	}
 	normalizeChannelName(e) {
 		return e.replace(/\s+/g, " ").trim().toUpperCase();
+	}
+	invalidateIconCache() {
+		this.cachedCombinedChannelIcons = void 0, this.cachedAliasMap = {};
 	}
 	groupEventsByDay() {
 		return this.events.reduce((e, t) => {
