@@ -224,23 +224,23 @@ sources:
 
 ## Configuration
 
-| Option              | Type                   | Description                                    |
-| ------------------- | ---------------------- | ---------------------------------------------- |
-| `title`             | string                 | Card title                                     |
-| `source_type`       | `calendar` \| `ha_epg` | Source provider type                           |
-| `source_calendar`   | string                 | Calendar entity used as source                 |
-| `source_entity`     | string                 | Single HA-EPG source entity                    |
-| `sources`           | list                   | Multiple selectable HA-EPG sources             |
-| `target_calendar`   | string                 | Target calendar entity                         |
-| `copy_script`       | string                 | Script used for copying events                 |
-| `days_to_show`      | number                 | Number of days to display                      |
-| `channel_icons`     | object                 | Inline channel icon mappings                   |
-| `channel_icons_url` | string                 | External JSON icon database                    |
-| `description_mode`  | string                 | `hidden`, `visible`, `toggle-on`, `toggle-off` |
-| `language`          | string                 | UI language (`en`, `nl`)                       |
-| `debug`             | boolean                | Enable debug logging                           |
-| `time_display_mode` | string                 | `compact` or `full`                            |
-| `time_locale`       | string                 | Locale for date/time formatting                |
+| Option | Type | Description |
+| ------ | ---- | ----------- |
+| `title` | `string` | Card title |
+| `source_type` | `calendar` \| `ha_epg` | Source provider type |
+| `source_calendar` | `string` | Calendar entity used as source |
+| `source_entity` | `string` | Single HA-EPG source entity |
+| `sources` | `list` | Multiple selectable HA-EPG sources |
+| `target_calendar` | `string` | Target calendar entity |
+| `copy_script` | `string` | Script used for copying events |
+| `days_to_show` | `number` | Number of days to display |
+| `channel_icons` | `object` | Inline channel icon mappings |
+| `channel_icons_url` | `string` | External JSON icon database |
+| `description_mode` | `hidden` \| `visible` \| `toggle-on` \| `toggle-off` | Description display mode |
+| `language` | `en` \| `nl` | UI language |
+| `debug` | `boolean` | Enable debug logging |
+| `time_display_mode` | `compact` \| `full` | Time display mode |
+| `time_locale` | `string` | Locale for date/time formatting |
 
 ---
 
