@@ -98,6 +98,7 @@ class TvPlannerCard extends LitElement {
   @state() private errorMessage = "";
   @state() private externalChannelIcons: Record<string, string> = {};
   @state() private expandedEvents: Record<string, boolean> = {};
+  @state() private descriptionsExpanded = false;
 
   /* ------------------------------------------------------------------------ */
   /* Styles                                                                   */
@@ -225,6 +226,7 @@ class TvPlannerCard extends LitElement {
     this.errorMessage = "";
     this.selectedSourceEntity =
       config.source_entity || config.sources?.[0]?.entity || "";
+    this.descriptionsExpanded = config.description_mode === "toggle-on";
 
     this.loadExternalChannelIcons();
   }
@@ -269,6 +271,18 @@ class TvPlannerCard extends LitElement {
             ${this.t("refresh_dashboard")}
           </button>
 
+          ${this.isDescriptionToggleEnabled()
+            ? html`
+                <button
+                  id="description-toggle"
+                  @click=${() => this.toggleAllDescriptions()}
+                >
+                  ${this.descriptionsExpanded
+                    ? this.t("hide_description")
+                    : this.t("show_description")}
+                </button>
+              `
+            : html``}
           ${this.lastCopied
             ? html`<p class="success">
                 ${this.t("copied")}: ${this.lastCopied}
@@ -379,22 +393,9 @@ class TvPlannerCard extends LitElement {
       return html`<div class="description">${event.description}</div>`;
     }
 
-    const key = this.getEventKey(event);
-    const defaultExpanded = mode === "toggle-on";
-    const expanded = this.expandedEvents[key] ?? defaultExpanded;
-
-    return html`
-      <div
-        class="description-toggle"
-        @click=${() => this.toggleEventDescription(event)}
-      >
-        ${expanded ? this.t("hide_description") : this.t("show_description")}
-      </div>
-
-      ${expanded
-        ? html`<div class="description">${event.description}</div>`
-        : html``}
-    `;
+    return this.descriptionsExpanded
+      ? html`<div class="description">${event.description}</div>`
+      : html``;
   }
 
   /* ------------------------------------------------------------------------ */
@@ -441,10 +442,11 @@ class TvPlannerCard extends LitElement {
 
     const ok = confirm(
       this.t("confirm_copy", {
-        event: event.summary,
-        calendar: config.target_calendar,
+        summary: event.summary,
+        target_calendar: config.target_calendar,
       }),
     );
+
     if (!ok) return;
 
     await hass.callService("script", config.copy_script, {
@@ -955,6 +957,17 @@ class TvPlannerCard extends LitElement {
     }
 
     console.debug(`TV Planner Card: ${message}`, ...args);
+  }
+
+  private isDescriptionToggleEnabled(): boolean {
+    return (
+      this.config?.description_mode === "toggle-on" ||
+      this.config?.description_mode === "toggle-off"
+    );
+  }
+
+  private toggleAllDescriptions() {
+    this.descriptionsExpanded = !this.descriptionsExpanded;
   }
 
   /* ------------------------------------------------------------------------ */

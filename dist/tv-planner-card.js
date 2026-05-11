@@ -608,7 +608,7 @@ function Q(e, t, n, r) {
 //#region src/tv-planner-card.ts
 var $ = class extends J {
 	constructor(...e) {
-		super(...e), this.cachedAliasMap = {}, this.events = [], this.loading = !1, this.selectedSourceEntity = "", this.lastCopied = "", this.loaded = !1, this.errorMessage = "", this.externalChannelIcons = {}, this.expandedEvents = {};
+		super(...e), this.cachedAliasMap = {}, this.events = [], this.loading = !1, this.selectedSourceEntity = "", this.lastCopied = "", this.loaded = !1, this.errorMessage = "", this.externalChannelIcons = {}, this.expandedEvents = {}, this.descriptionsExpanded = !1;
 	}
 	static {
 		this.styles = o`
@@ -721,7 +721,7 @@ var $ = class extends J {
   `;
 	}
 	setConfig(e) {
-		this.invalidateIconCache(), this.config = e, this.events = [], this.loading = !1, this.errorMessage = "", this.selectedSourceEntity = e.source_entity || e.sources?.[0]?.entity || "", this.loadExternalChannelIcons();
+		this.invalidateIconCache(), this.config = e, this.events = [], this.loading = !1, this.errorMessage = "", this.selectedSourceEntity = e.source_entity || e.sources?.[0]?.entity || "", this.descriptionsExpanded = e.description_mode === "toggle-on", this.loadExternalChannelIcons();
 	}
 	set hass(e) {
 		this._hass = e, this.invalidateIconCache(), this.loaded || (this.loaded = !0, this.loadEvents());
@@ -747,6 +747,14 @@ var $ = class extends J {
             ${this.t("refresh_dashboard")}
           </button>
 
+          ${this.isDescriptionToggleEnabled() ? L`
+                <button
+                  id="description-toggle"
+                  @click=${() => this.toggleAllDescriptions()}
+                >
+                  ${this.descriptionsExpanded ? this.t("hide_description") : this.t("show_description")}
+                </button>
+              ` : L``}
           ${this.lastCopied ? L`<p class="success">
                 ${this.t("copied")}: ${this.lastCopied}
               </p>` : L``}
@@ -815,19 +823,7 @@ var $ = class extends J {
 	}
 	renderDescription(e) {
 		let t = this.config?.description_mode || "visible";
-		if (!e.description || t === "hidden") return L``;
-		if (t === "visible") return L`<div class="description">${e.description}</div>`;
-		let n = this.getEventKey(e), r = t === "toggle-on", i = this.expandedEvents[n] ?? r;
-		return L`
-      <div
-        class="description-toggle"
-        @click=${() => this.toggleEventDescription(e)}
-      >
-        ${i ? this.t("hide_description") : this.t("show_description")}
-      </div>
-
-      ${i ? L`<div class="description">${e.description}</div>` : L``}
-    `;
+		return !e.description || t === "hidden" ? L`` : t === "visible" || this.descriptionsExpanded ? L`<div class="description">${e.description}</div>` : L``;
 	}
 	sourceChanged(e) {
 		let t = e.target;
@@ -854,8 +850,8 @@ var $ = class extends J {
 			return;
 		}
 		confirm(this.t("confirm_copy", {
-			event: e.summary,
-			calendar: t.target_calendar
+			summary: e.summary,
+			target_calendar: t.target_calendar
 		})) && (await n.callService("script", t.copy_script, {
 			source_type: t.source_type || "calendar",
 			source_calendar: t.source_calendar || "",
@@ -1085,11 +1081,17 @@ var $ = class extends J {
 	debugLog(e, ...t) {
 		this.isDebugEnabled() && console.debug(`TV Planner Card: ${e}`, ...t);
 	}
+	isDescriptionToggleEnabled() {
+		return this.config?.description_mode === "toggle-on" || this.config?.description_mode === "toggle-off";
+	}
+	toggleAllDescriptions() {
+		this.descriptionsExpanded = !this.descriptionsExpanded;
+	}
 	t(e, t = {}) {
 		return ye(this.config?.language, e, t);
 	}
 };
-Q([Y({ attribute: !1 })], $.prototype, "config", void 0), Q([X()], $.prototype, "events", void 0), Q([X()], $.prototype, "loading", void 0), Q([X()], $.prototype, "selectedSourceEntity", void 0), Q([X()], $.prototype, "lastCopied", void 0), Q([X()], $.prototype, "loaded", void 0), Q([X()], $.prototype, "errorMessage", void 0), Q([X()], $.prototype, "externalChannelIcons", void 0), Q([X()], $.prototype, "expandedEvents", void 0), customElements.define("tv-planner-card", $);
+Q([Y({ attribute: !1 })], $.prototype, "config", void 0), Q([X()], $.prototype, "events", void 0), Q([X()], $.prototype, "loading", void 0), Q([X()], $.prototype, "selectedSourceEntity", void 0), Q([X()], $.prototype, "lastCopied", void 0), Q([X()], $.prototype, "loaded", void 0), Q([X()], $.prototype, "errorMessage", void 0), Q([X()], $.prototype, "externalChannelIcons", void 0), Q([X()], $.prototype, "expandedEvents", void 0), Q([X()], $.prototype, "descriptionsExpanded", void 0), customElements.define("tv-planner-card", $);
 //#endregion
 
 //# sourceMappingURL=tv-planner-card.js.map
